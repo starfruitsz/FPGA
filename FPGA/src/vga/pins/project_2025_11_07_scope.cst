@@ -94,27 +94,27 @@ IO_PORT "led6" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
 // A 帧指示
 IO_LOC "led7" B9;
 IO_PORT "led7" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *VGA HSYNC
-IO_LOC "vga_hs" T15;
+// VGA HSYNC (bank4 空闲 IOB45[B])
+IO_LOC "vga_hs" T11;
 IO_PORT "vga_hs" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *VGA VSYNC
-IO_LOC "vga_vs" T14;
+// VGA VSYNC (bank4 空闲 IOB43[A])
+IO_LOC "vga_vs" T12;
 IO_PORT "vga_vs" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *R1 -> 270R
-IO_LOC "vga_rgb[11]" R16;
+// R1 -> 270R (bank4 空闲 IOB50[A])
+IO_LOC "vga_rgb[11]" U13;
 IO_PORT "vga_rgb[11]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *R0 -> 560R
-IO_LOC "vga_rgb[10]" R15;
+// R0 -> 560R (bank4 空闲 IOB35[A])
+IO_LOC "vga_rgb[10]" R10;
 IO_PORT "vga_rgb[10]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *G1 -> 270R
-IO_LOC "vga_rgb[7]" U14;
+// G1 -> 270R (bank4 空闲 IOB39[A])
+IO_LOC "vga_rgb[7]" U11;
 IO_PORT "vga_rgb[7]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *G0 -> 560R
-IO_LOC "vga_rgb[6]" U13;
+// G0 -> 560R (bank4 空闲 IOB52[A])
+IO_LOC "vga_rgb[6]" N12;
 IO_PORT "vga_rgb[6]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *B1 -> 270R
-IO_LOC "vga_rgb[3]" V17;
+// B1 -> 270R (bank4 空闲 IOB54[B])
+IO_LOC "vga_rgb[3]" V14;
 IO_PORT "vga_rgb[3]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
-// *B0 -> 560R
-IO_LOC "vga_rgb[2]" V14;
+// B0 -> 560R (bank4 空闲 IOB48[A])
+IO_LOC "vga_rgb[2]" M11;
 IO_PORT "vga_rgb[2]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;

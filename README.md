@@ -52,8 +52,10 @@
 （`FPGA/project_2025_11_07.gprj` 的 FileList 由 12 条变为 26 条）；
 TD 容器工程 `FPGA_TD/project_2025_11_07_TD.al` 已收录 25 个源文件、
 Top 设为 `adda_scope_top`，并已重新打开验证（层次树顶层为 adda_scope_top，4 个子模块）。
-Gowin GUI 中还需右键 `adda_scope_top` → "Set as Top Module"（.gprj 不保存 Top 设置），
-VGA 的 8 个引脚仍待按板卡原理图填入 CSV。
+Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj` 的
+`top_module` 与 `process_config.json` 的 `TopModule`）；VGA 的 8 个引脚已从 PnR 报告的
+**All Package Pins** 中选出 bank 4 的空闲 IO（T11/T12/U13/R10/U11/N12/V14/M11，全部 3.3V、
+与现有 30 个端口及数码管自动布局引脚无冲突），并写入 `FPGA/src/project_2025_11_07.cst`。
 
 ![TD 重新打开后的工程](TD_scope_project.jpg)
 

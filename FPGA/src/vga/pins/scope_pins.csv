@@ -38,12 +38,12 @@ tx,N18,out,8,NONE,3.3,串口发送
 led0,D14,out,8,NONE,3.3,状态灯
 led6,C14,out,8,NONE,3.3,B 帧指示
 led7,B9,out,8,NONE,3.3,A 帧指示
-# ---- 以下为 VGA 接口（* 示例引脚，按板卡实际可用 IO 修改）----
-vga_hs,T15,out,8,NONE,3.3,*VGA HSYNC
-vga_vs,T14,out,8,NONE,3.3,*VGA VSYNC
-vga_rgb[11],R16,out,8,NONE,3.3,*R1 -> 270R
-vga_rgb[10],R15,out,8,NONE,3.3,*R0 -> 560R
-vga_rgb[7],U14,out,8,NONE,3.3,*G1 -> 270R
-vga_rgb[6],U13,out,8,NONE,3.3,*G0 -> 560R
-vga_rgb[3],V17,out,8,NONE,3.3,*B1 -> 270R
-vga_rgb[2],V14,out,8,NONE,3.3,*B0 -> 560R
+# ---- VGA 接口：已按 PnR 报告的 All Package Pins 选出 bank4 的 8 个空闲 IO ----
+vga_hs,T11,out,8,NONE,3.3,VGA HSYNC (bank4 空闲 IOB45[B])
+vga_vs,T12,out,8,NONE,3.3,VGA VSYNC (bank4 空闲 IOB43[A])
+vga_rgb[11],U13,out,8,NONE,3.3,R1 -> 270R (bank4 空闲 IOB50[A])
+vga_rgb[10],R10,out,8,NONE,3.3,R0 -> 560R (bank4 空闲 IOB35[A])
+vga_rgb[7],U11,out,8,NONE,3.3,G1 -> 270R (bank4 空闲 IOB39[A])
+vga_rgb[6],N12,out,8,NONE,3.3,G0 -> 560R (bank4 空闲 IOB52[A])
+vga_rgb[3],V14,out,8,NONE,3.3,B1 -> 270R (bank4 空闲 IOB54[B])
+vga_rgb[2],M11,out,8,NONE,3.3,B0 -> 560R (bank4 空闲 IOB48[A])

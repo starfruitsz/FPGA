@@ -76,8 +76,26 @@
 ### 3.1 引脚（综合前）
 
 改 `pins/scope_pins.csv` → `python pins/gen_cst.py` → 生成
-`project_2025_11_07_scope.cst`。RTL 不含任何引脚信息；VGA 的 8 个脚是示例（带 `*`），
-按板卡实际可用的 IO 改。
+`project_2025_11_07_scope.cst`。RTL 不含任何引脚信息。
+
+VGA 的 8 个引脚已按 **PnR 报告的 All Package Pins** 选出 bank 4 的空闲 IO（全部 3.3V、
+未与现有 30 个端口及自动布局的数码管引脚冲突），并已写入工程约束
+`FPGA/src/project_2025_11_07.cst`：
+
+| 端口 | 引脚 | Site | 接法 |
+|---|---|---|---|
+| `vga_hs` | T11 | IOB45[B] | DE-15 脚 13 |
+| `vga_vs` | T12 | IOB43[A] | DE-15 脚 14 |
+| `vga_rgb[11]` | U13 | IOB50[A] | R1 → 270Ω |
+| `vga_rgb[10]` | R10 | IOB35[A] | R0 → 560Ω |
+| `vga_rgb[7]` | U11 | IOB39[A] | G1 → 270Ω |
+| `vga_rgb[6]` | N12 | IOB52[A] | G0 → 560Ω |
+| `vga_rgb[3]` | V14 | IOB54[B] | B1 → 270Ω |
+| `vga_rgb[2]` | M11 | IOB48[A] | B0 → 560Ω |
+
+> 这 8 个脚来自报告里 `Signal="-"` 的空闲 IO；如果板卡上这些脚已被其它器件占用，
+> 改 CSV 后重新生成即可。换到别的 bank 时注意 BankVccio 要与电阻网络一致（3.3V）。
+
 
 ### 3.2 视频格式（综合前，参数）
 

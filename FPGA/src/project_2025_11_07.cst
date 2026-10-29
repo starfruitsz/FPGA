@@ -106,3 +106,25 @@ IO_PORT "sys_rst_n" PULL_MODE=NONE BANK_VCCIO=3.3;
 //------------------------------------------------------------------------------
 IO_LOC "sys_clk" T9;
 IO_PORT "sys_clk" PULL_MODE=NONE BANK_VCCIO=3.3;
+
+//==============================================================================
+// VGA 接口（由 src/vga/pins/scope_pins.csv 生成；引脚取自 PnR 报告
+// All Package Pins 中 bank4 未使用的 8 个 IO，VCCIO=3.3V）
+// HS/VS 直连显示器；RGB 经 270Ω(R1/G1/B1) + 560Ω(R0/G0/B0) 电阻网络
+//==============================================================================
+IO_LOC "vga_hs" T11;
+IO_PORT "vga_hs" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_vs" T12;
+IO_PORT "vga_vs" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_rgb[11]" U13;
+IO_PORT "vga_rgb[11]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_rgb[10]" R10;
+IO_PORT "vga_rgb[10]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_rgb[7]" U11;
+IO_PORT "vga_rgb[7]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_rgb[6]" N12;
+IO_PORT "vga_rgb[6]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_rgb[3]" V14;
+IO_PORT "vga_rgb[3]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "vga_rgb[2]" M11;
+IO_PORT "vga_rgb[2]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
