@@ -28,6 +28,7 @@ module vga_scope_top #(
     parameter integer TEXT_Y0   = 448,
     parameter integer TEXT_X0   = 8,
     parameter integer DEPTH_LOG2 = 10,
+    parameter integer CLK_HZ     = 50_000_000,
     parameter integer FEAT_TRIG   = 1,
     parameter integer FEAT_MEAS   = 1,
     parameter integer FEAT_SCROLL = 1,
@@ -103,7 +104,9 @@ module vga_scope_top #(
     wire [DEPTH_LOG2-1:0] rd_base0, rd_base1;
     wire [1:0]  state0, state1;
 
-    scope_app u_app (
+    scope_app #(
+        .CLK_HZ(CLK_HZ)
+    ) u_app (
         .clk(clk), .rst(rst), .key_in(key_in),
         .ext_tb_we(cfg_tb_we),       .ext_tb(cfg_tb),
         .ext_run_we(cfg_run_we),     .ext_run(cfg_run),

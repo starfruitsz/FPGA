@@ -9,7 +9,9 @@
 //==============================================================================
 `timescale 1ns / 1ps
 
-module scope_app (
+module scope_app #(
+    parameter integer CLK_HZ = 50_000_000
+)(
     input  wire        clk,
     input  wire        rst,
     input  wire        key_in,
@@ -58,7 +60,7 @@ module scope_app (
     // 按键去抖（复用已有模块）
     //------------------------------------------------------------------
     scope_ui #(
-        .CLK_HZ (50_000_000),
+        .CLK_HZ (CLK_HZ),
         .DB_MS  (20),
         .LONG_MS(800)
     ) u_ui (
@@ -88,13 +90,14 @@ module scope_app (
     //------------------------------------------------------------------
     // 翻页计数：每 2 秒翻转一次(50MHz x 2s = 100,000,000)
     //------------------------------------------------------------------
+    localparam integer PAGE_MAX = 2*CLK_HZ - 1;
     reg [26:0] page_cnt;
     always @(posedge clk) begin
         if (rst) begin
             page_cnt <= 27'd0;
             page     <= 1'b0;
         end
-        else if (page_cnt == 27'd99_999_999) begin
+        else if (page_cnt == PAGE_MAX[26:0]) begin
             page_cnt <= 27'd0;
             page     <= ~page;
         end

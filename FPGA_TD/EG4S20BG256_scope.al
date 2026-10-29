@@ -302,6 +302,14 @@
                     <Attr Name="CompileOrder" Val="36"/>
                 </FileInfo>
             </File>
+            <File Path="../FPGA/src/sparkroad_scope_top.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="37"/>
+                </FileInfo>
+            </File>
         </Verilog>
     </Source_Files>
     <FileSets>
@@ -312,7 +320,7 @@
     </FileSets>
     <TOP_MODULE>
         <LABEL></LABEL>
-        <MODULE>adda_scope_top</MODULE>
+        <MODULE>sparkroad_scope_top</MODULE>
         <CREATEINDEX>user</CREATEINDEX>
     </TOP_MODULE>
     <Property>
@@ -338,3 +346,4 @@
     <Project_Settings>
     </Project_Settings>
 </Project>
+

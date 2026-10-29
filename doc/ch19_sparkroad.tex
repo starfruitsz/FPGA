@@ -1,0 +1,178 @@
+% =====================================================================
+%  ch19_sparkroad.tex -- 第 19 章 SparkRoad-V 移植与 TD 工程操作
+% =====================================================================
+\section{SparkRoad-V 移植与 TD 工程操作}
+
+本章记录把示波器从高云 GW5A 工程迁移到 \textbf{SparkRoad-V（Anlogic EG4S20BG256）}
+的顶层设计、引脚约束生成方式，以及完整的 TD 工程操作步骤。
+
+\subsection{目标板与器件}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 参数\\
+\midrule
+FPGA & Anlogic EG4S20BG256（Eagle 系列，BG256）\\
+系统时钟 & 24\,MHz 有源晶振（K14）\\
+VGA & GM7123 视频 DAC，24\,bit（RGB 各 8\,bit），HS/VS/CLK\\
+ADC & AD7606 模块（8 通道 16\,bit、200\,kSPS、±5V/±10V、SPI/并口）\\
+数码管 & 4 位，DIG\_1..4 + SEG\_A..H\\
+按键 & 5 个独立按键（BUTTON\_L/R/U/D/C）\\
+串口 & USB2UART（TX=F16，RX=E16）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{顶层结构}
+
+\file{sparkroad_scope_top.v} 的组成：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+模块 & 作用 & 说明\\
+\midrule
+\file{uart_rx} & 接收 115200 字节 & 24\,MHz 时钟\\
+\file{scope_cmd} & 示波器命令（T/R/A/L/E/S/M/C/P/H） & 产生 cfg 写脉冲\\
+\file{adc_cmd} & ADC 命令（R/O/S/K/N） & 产生 CSR 写\\
+\file{adc_ad7606_top} & AD7606 串行采集 + 归一化 & 10\,bit 输出\\
+\file{vga_scope_top} & 示波器显示 & 640$\times$480，PIX\_DIV=1\\
+\file{seg} & 数码管显示 AD 码值 & 4 位动态扫描\\
+\file{uart_tx} & 每 1\,ms 上报一帧 & 16\,bit\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+信号流：AD7606 $\rightarrow$ ADC HAL（补码$\rightarrow$偏移二进制$\rightarrow$10\,bit）
+$\rightarrow$ 采集/触发/测量 $\rightarrow$ 图层合成 $\rightarrow$ VGA RGB444
+$\rightarrow$ 每 4\,bit 复制为 8\,bit $\rightarrow$ GM7123。
+
+\subsection{时钟与视频时序}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item 板载时钟 24\,MHz，直接作为像素时钟（\sig{PIX_DIV=1}）；
+  \item 640$\times$480 行场参数：H=640+16+96+48=800，V=480+10+2+33=525；
+  \item 场频 = 24\,MHz / (800$\times$525) $\approx$ 57.1\,Hz，属于显示器可接受范围；
+  \item 若要严格 59.94\,Hz，可用 PLL 产生 25.175\,MHz（需要 EG4 的 PLL IP）。
+\end{itemize}
+
+\subsection{引脚与约束生成}
+
+引脚不再手写约束，而是集中在一个 CSV：
+
+\begin{lstlisting}[style=vsnip]
+FPGA/src/adc/pins/board_pins.csv   # 信号,位宽,引脚(|分隔),说明
+tools/gen_adc_pins.py              # -> FPGA_TD/eg4/SparkRoad.adc
+\end{lstlisting}
+
+CSV 覆盖 20 个信号、51 个引脚（时钟、复位、按键、串口、VGA 24\,bit、
+数码管、AD7606 七根线）。修改接线只改 CSV，再运行脚本重新生成；
+脚本会检查位宽匹配与引脚重复。
+
+\subsection{TD 工程操作步骤}
+
+\subsubsection{环境要求}
+
+TD 必须安装 \textbf{Eagle（EG4）器件库}。若打开工程提示
+\sig{Unknown device name EG4S20BG256}，说明当前 TD 只有 PH1/PH2 器件库
+（本机 TD 6.0.3 即如此），需安装 TD 5.x 或向 Anlogic 索取 EG4 支持包。
+
+\subsubsection{创建工程（Tcl）}
+
+\begin{lstlisting}[style=vsnip]
+cd <repo>/FPGA_TD/eg4
+create_project -family eg4 -device EG4S20BG256 EG4S20BG256_scope .
+import_device eg4_20.db -package BG256 -speed 5
+add_files -list ./files.list
+top_module sparkroad_scope_top
+exit
+\end{lstlisting}
+
+\subsubsection{图形界面步骤}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 打开 \file{FPGA_TD/EG4S20BG256_scope.al}（或按上节重建）；
+  \item 确认器件为 \sig{EG4S20BG256}，速度等级与板卡一致（默认 -5）；
+  \item 源文件应为 \textbf{37 个}，顶层设为 \sig{sparkroad_scope_top}；
+  \item 在约束集里加入 \file{FPGA_TD/eg4/SparkRoad.adc}；
+  \item Run Synthesis $\rightarrow$ Run Place \& Route $\rightarrow$ Generate Bitstream；
+  \item 用 TD Programmer 下载 \file{.bit} 到板卡。
+\end{enumerate}
+
+\subsubsection{约束文件格式}
+
+Anlogic TD 使用 \file{.adc}，每行一条：
+
+\begin{lstlisting}[style=vsnip]
+set_pin_assignment {clk} { LOCATION = K14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[0]} { LOCATION = L5; IOSTANDARD = LVCMOS33; }
+\end{lstlisting}
+
+\subsection{上板调试顺序}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 先断开 AD7606，烧录工程，确认 VGA 出现网格/文字（证明时钟、VGA、
+        图层链路正常）；
+  \item 接 AD7606 的 5V/GND 与七根信号线，串口发 \sig{N1} 使能、\sig{R1} 选 ±10V；
+  \item 给 IN1 输入 1\,kHz 正弦，观察波形；用 \sig{K} 调整采样间隔；
+  \item 再测试触发（\sig{A1}、\sig{L}、\sig{M}）与预触发（\sig{P}）。
+\end{enumerate}
+
+\subsection{串口命令}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+命令 & 作用 & 范围\\
+\midrule
+\sig{T<hex>} & 时基分频 & 0$\sim$FFFF\\
+\sig{R<hex>} & 运行/冻结（scope） & 0/1\\
+\sig{A<hex>} & 触发使能 & 0/1\\
+\sig{L<hex>} & 触发电平 & 0$\sim$3FF\\
+\sig{E<hex>} & 触发边沿 & 0/1\\
+\sig{S<hex>} & 滚动开关 & 0/1\\
+\sig{M<hex>} & 触发模式 & 0/1/2\\
+\sig{C<hex>} & 触发源 & 0/1\\
+\sig{P<hex>} & 预触发点数 & 0$\sim$3FF\\
+\sig{H<hex>} & 保持时间 & 0$\sim$FFFF\\
+\midrule
+\sig{R<hex>} & ADC 量程（adc\_cmd） & 0=±5V 1=±10V\\
+\sig{O<hex>} & 过采样 & 0$\sim$6\\
+\sig{S<hex>} & SCLK 半周期 & 0$\sim$FFFF\\
+\sig{K<hex>} & ADC 采样间隔 & 0$\sim$FFFF\\
+\sig{N<hex>} & ADC 使能 & 0/1\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+注意：\sig{R/S} 在示波器与 ADC 两个解析器中含义不同，但作用对象不同
+（一个写 VGA 参数，一个写 ADC CSR），互不影响。
+
+\subsection{已知限制}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item SparkRoad-V 无 DAC，CH1 暂接固定中点，仅 CH0 有效；
+  \item AD7606 串行模式当前只读 DOUTA 的 ch1$\sim$ch4（ch5$\sim$8 需接 DOUTB）；
+  \item 24\,MHz 像素时钟下场频约 57\,Hz，部分显示器可能需要 25.175\,MHz PLL；
+  \item 本机 TD 6.0.3 缺 EG4 器件库，尚未实际综合/上板。
+\end{itemize}
+
+\subsection{验证}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项 & 结果\\
+\midrule
+TD 前端分析 & 37 个源文件通过\\
+端口连接检查 & 35 模块 / 47 处例化 / 0 错误\\
+约束生成 & 20 信号 / 51 引脚，无重复\\
+综合/上板 & 待具备 EG4 器件库的 TD 环境\\
+\bottomrule
+\end{tabular}
+\end{center}

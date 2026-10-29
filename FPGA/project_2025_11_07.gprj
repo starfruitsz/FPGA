@@ -40,5 +40,6 @@
       <File path="src/adc/adc_ad7606_top.v" type="file.verilog" enable="1"/>
       <File path="src/adc/hal/adc_ad7606_spi.v" type="file.verilog" enable="1"/>
       <File path="src/adc/app/adc_cmd.v" type="file.verilog" enable="1"/>
+      <File path="src/sparkroad_scope_top.v" type="file.verilog" enable="1"/>
 </FileList>
 </Project>

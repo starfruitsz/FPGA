@@ -302,6 +302,14 @@
                     <Attr Name="CompileOrder" Val="36"/>
                 </FileInfo>
             </File>
+            <File Path="../FPGA/src/sparkroad_scope_top.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="37"/>
+                </FileInfo>
+            </File>
         </Verilog>
     </Source_Files>
     <FileSets>
