@@ -17,7 +17,7 @@
 | 注释后源码 | `FPGA/src/**` | 17 个文件，仅新增 `//` 注释 |
 | 原始源码备份 | `FPGA/src_original_backup/**` | 注释前的逐字节副本 |
 | LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 19 章（ch01–ch19）+ main/style/appendix |
-| 最终 PDF | `FPGA_project_analysis.pdf`（127 页） | 与 `doc/main.pdf` 相同；第 17–19 章：修复记录 / 示波器 v2 / SparkRoad 移植 |
+| 最终 PDF | `FPGA_project_analysis.pdf`（131 页） | 与 `doc/main.pdf` 相同；第 17–19 章：修复记录 / 示波器 v2 / SparkRoad 移植 |
 | TD 打开截图 | `TD_open_project.jpg` | 层次树已识别 adda(7)/Gowin_PLL(1)/fifo_top(4) |
 | **VGA 示波器（分层）** | `FPGA/src/vga/**` | HAL/抽象/应用三层，引脚表与时基可配 |
 | VGA 屏幕预览 | `FPGA/src/vga/preview_640x480.png` | 用 Python 复现渲染结果的效果图 |
@@ -79,7 +79,7 @@ Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj
 - `src/adc/`：AD7606 串行驱动 + 归一化 + 运行时 CSR（量程/过采样/SCLK/采样率）+ `adc_cmd`；
 - 引脚由 `src/adc/pins/board_pins.csv` 经 `tools/gen_adc_pins.py` 生成 `FPGA_TD/eg4/SparkRoad.adc`（51 引脚）；
 - EG4 工程 `FPGA_TD/EG4S20BG256_scope.al`（37 文件，顶层 `sparkroad_scope_top`），本机 TD 缺 Eagle 器件库；
-- 报告新增第 19 章：顶层结构、时钟/VGA、约束生成、TD 工程操作步骤、上板顺序。
+- 报告新增第 19 章：顶层结构、时钟/VGA、约束生成、TD 工程操作、**上板步骤详解、引脚设置教程、参数设置教程、故障排查**。
 
 ## 2. 三步任务完成情况
 
