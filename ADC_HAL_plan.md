@@ -125,3 +125,12 @@ S5 仿真 + TD + 第 19 章
 - S3：`adc_spi` 具体实现，需 SPI 模式/位宽/CS 极性/时钟频率；
 - S4：CSR 接到串口命令，顶层 SPI 引脚 + 约束；
 - S5：仿真与第 19 章。
+
+
+## 10. S3 进展（AD7606）
+
+- 新增 src/adc/hal/adc_ad7606_spi.v：串行模式驱动（CONVST/BUSY/CS/SCLK/DOUTA/RESET），
+  每次转换读回 ch1..ch4（DOUTA），16bit MSB-first；
+- 新增 src/adc/adc_ad7606_top.v：CSR + 驱动 + 归一化（补码→偏移二进制→取高 10 位）；
+- adc_norm 增加 SIGNED 参数（补码转偏移二进制）；
+- 引脚建议见 doc/SparkRoad-V_pinmap.md 第 8 节（待确认接线后写约束）。

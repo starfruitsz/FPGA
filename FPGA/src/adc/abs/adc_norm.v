@@ -9,9 +9,10 @@
 `timescale 1ns / 1ps
 
 module adc_norm #(
-    parameter integer DW    = 16,
-    parameter integer RES   = 12,
-    parameter integer ALIGN = 1
+    parameter integer DW     = 16,
+    parameter integer RES    = 12,
+    parameter integer ALIGN  = 1,
+    parameter integer SIGNED = 0     // 1=输入为补码，先转偏移二进制
 )(
     input  wire          clk,
     input  wire          rst,
@@ -25,7 +26,9 @@ module adc_norm #(
     input  wire          s_ready
 );
     localparam [DW-1:0] MASK = (1 << RES) - 1;
-    wire [DW-1:0] norm = ALIGN ? (r_data >> (DW - RES)) : (r_data & MASK);
+    // 补码 -> 偏移二进制：翻转最高位
+    wire [DW-1:0] src  = SIGNED ? (r_data ^ {1'b1, {(DW-1){1'b0}}}) : r_data;
+    wire [DW-1:0] norm = ALIGN ? (src >> (DW - RES)) : (src & MASK);
 
     assign s_data  = norm;
     assign s_ch    = r_ch;

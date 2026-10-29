@@ -77,3 +77,45 @@
 | 并行 DAC `ad_out/da_clk1` | 板上无 DAC | adda 的 DA 回环无法映射；CH1 需改用其他信号或去掉 |
 | 数码管 sel/seg | DIG/SEG 命名，4 位 | 一一对应，但位选有效电平需确认 |
 | 按键 key_in | BUTTON_L/R/U/D/C | 任选其一 |
+
+
+## 7. AD7606 模块引脚（来自模块手册 V1.1）
+
+| 模块引脚 | 芯片引脚 | 说明 |
+|---|---|---|
+| D15..D8 | DB15..DB8 | 并行数据高 8 位 |
+| D7 | DB7 / DOUTA | 并行 D7；串行模式数据输出 A |
+| D6..D0 | DB6..DB0 | 并行数据（串行模式不用） |
+| FDA | FRSTDATA | 第一通道数据指示 |
+| BUSY | BUSY | 转换忙，高有效 |
+| CS | CS | 片选，低有效 |
+| RD | RD / SCLK | 并行读；串行模式时钟 |
+| RST | RESET | 复位，高有效 |
+| CB / CA | CONVST B / A | 转换启动（可并联） |
+| RANGE | RANGE | 1=±10V，0=±5V（模块默认上拉 ±10V） |
+| STBY | STBY | 低=待机，正常接高 |
+| SER | PAR/SER | 1=串行模式，0=并行 |
+| OS0..OS2 | OS0..OS2 | 过采样倍数，000=不开启 |
+| NC | — | 悬空 |
+
+电压换算（REF=2.5V）：±5V 量程 A(mV) = D*5000/32768；±10V 量程 A(mV) = D*10000/32768；
+D 是 16bit 补码。
+
+## 8. AD7606 → SparkRoad-V 建议接线（GPIO 排针）
+
+| AD7606 | FPGA 端口 | SparkRoad-V 引脚 |
+|---|---|---|
+| CA+CB | convst | A7（T1_N） |
+| BUSY | busy | A8（T1_P） |
+| CS | cs_n | A10（T2_P） |
+| RD/SCLK | sclk | A9（T2_N） |
+| D7/DOUTA | douta | A5（T3_P） |
+| RST | adc_reset | A6（T3_N） |
+| SER | ser | A3（T4_P）或直接接 3.3V |
+| RANGE | 悬空或 range | 悬空=±10V |
+| STBY | 接 3.3V | — |
+| OS0..2 | 接 GND | — |
+| +5V / GND | 模块电源 | 排针 5V / GND |
+
+注意：以上为建议接线，实际以杜邦线为准；A7/A8/A10/A9/A5/A6/A3 属于 GPIO 扩展口，
+使用前确认未被 SDRAM/摄像头占用；模块 5V 供电，禁止把 ±10V 模拟输入接到 FPGA。
