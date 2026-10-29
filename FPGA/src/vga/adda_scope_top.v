@@ -25,7 +25,7 @@
 // ======================================================================
 module adda_scope_top #(
     // [P5] 串口上报方式（透传给 adda）
-    parameter integer UART_MODE = 1,   // 0=连续发送  1=按标志位定时发送
+    parameter integer UART_MODE = 0,   // 0=连续发送  1=按标志位定时发送
     parameter integer REPORT_MS = 26   // 标志位模式下的上报周期(ms)
 )( 
     input  wire        sys_clk,
@@ -103,6 +103,38 @@ module adda_scope_top #(
         .led0     (led0),
         .led6     (led6),
         .led7     (led7)
+    );
+
+    //------------------------------------------------------------------
+    // ADC 硬件抽象层(S1/S2): 并行基线模型 -> 归一化采样流
+    //   换 SPI 型号时只改 IMPL 参数并在 hal/ 下实现驱动，应用层不动
+    //------------------------------------------------------------------
+    wire [15:0] adc_s_data;
+    wire        adc_s_valid, adc_locked, adc_error;
+
+    adc_top #(
+        .IMPL (1),      // 0=stub 1=par(基线) 2=spi
+        .RES  (10),
+        .ALIGN(0),      // 当前板载并行数据右对齐
+        .CH   (1)
+    ) u_adc (
+        .clk      (sys_clk),
+        .rst      (~sys_rst_n),
+        .csr_addr (8'd0),
+        .csr_wdata(32'd0),
+        .csr_we   (1'b0),
+        .csr_rdata(),
+        .adc_din  ({6'd0, ad_date}),
+        .spi_sclk (),
+        .spi_cs_n (),
+        .spi_mosi (),
+        .spi_miso (1'b0),
+        .s_data   (adc_s_data),
+        .s_ch     (),
+        .s_valid  (adc_s_valid),
+        .s_ready  (1'b1),
+        .locked   (adc_locked),
+        .error    (adc_error)
     );
 
     //------------------------------------------------------------------
@@ -196,7 +228,8 @@ module adda_scope_top #(
             ) u_scope (
                 .clk       (sys_clk),
                 .rst       (~sys_rst_n),
-                .ch0_in    (ad_date),
+                .ch0_in    (adc_s_data[9:0]),
+                .adc_valid (adc_s_valid),
                 .ch1_in    (ad_out),
                 .key_in    (key_in),
                 .cfg_tb_we (c_tb_we),

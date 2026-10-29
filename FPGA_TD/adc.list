@@ -1,0 +1,6 @@
+../FPGA/src/adc/adc_top.v
+../FPGA/src/adc/hal/adc_par.v
+../FPGA/src/adc/hal/adc_stub.v
+../FPGA/src/adc/hal/adc_spi.v
+../FPGA/src/adc/abs/adc_norm.v
+../FPGA/src/adc/abs/adc_cfg.v

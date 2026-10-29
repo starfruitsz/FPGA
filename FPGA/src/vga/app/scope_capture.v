@@ -20,6 +20,7 @@ module scope_capture #(
     input  wire [9:0]              din,          // 采样数据
     input  wire [9:0]              trig_din,     // 触发源数据(顶层选择 CH0/CH1)
     input  wire [15:0]             rate_div,
+    input  wire                    sample_valid,   // ADC 采样有效(来自 HAL)
     input  wire                    run,
     input  wire                    arm,
     input  wire                    trig_en,
@@ -46,7 +47,7 @@ module scope_capture #(
     reg [DEPTH_LOG2:0] post_cnt;
     reg [15:0] hold_cnt;       // 触发保持计数(>0 时忽略新触发)
 
-    wire tick = (rate_cnt == rate_div);
+    wire tick = sample_valid && (rate_cnt == rate_div);
 
     // 完成且非自动模式时停止写入
     wire stopped = (state == ST_DONE) && (trig_mode != 2'd0);

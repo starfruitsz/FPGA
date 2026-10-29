@@ -43,6 +43,7 @@ module vga_scope_top #(
     input  wire        rst,
     input  wire [9:0]  ch0_in,
     input  wire [9:0]  ch1_in,
+    input  wire        adc_valid,   // ADC 采样有效(S2: 由 adc_top 提供)
     input  wire        key_in,
 
     // 串口配置
@@ -132,7 +133,7 @@ module vga_scope_top #(
     scope_capture #(.DEPTH_LOG2(DEPTH_LOG2)) u_cap0 (
         .clk(clk), .rst(rst),
         .din(ch0_in), .trig_din(trig_din),
-        .rate_div(tb_div), .run(run), .arm(arm),
+        .rate_div(tb_div), .sample_valid(adc_valid), .run(run), .arm(arm),
         .trig_en(FEAT_TRIG ? trig_en : 1'b0),
         .trig_mode(trig_mode), .trig_level(trig_level), .trig_edge(trig_edge),
         .pre_trig(pre_trig), .holdoff(holdoff),
@@ -143,7 +144,7 @@ module vga_scope_top #(
     scope_capture #(.DEPTH_LOG2(DEPTH_LOG2)) u_cap1 (
         .clk(clk), .rst(rst),
         .din(ch1_in), .trig_din(trig_din),
-        .rate_div(tb_div), .run(run), .arm(arm),
+        .rate_div(tb_div), .sample_valid(adc_valid), .run(run), .arm(arm),
         .trig_en(FEAT_TRIG ? trig_en : 1'b0),
         .trig_mode(trig_mode), .trig_level(trig_level), .trig_edge(trig_edge),
         .pre_trig(pre_trig), .holdoff(holdoff),

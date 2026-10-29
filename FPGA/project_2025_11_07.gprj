@@ -31,5 +31,11 @@
         <File path="src/vga/app/vga_test_app.v" type="file.verilog" enable="1"/>
         <File path="src/vga/vga_test_top.v" type="file.verilog" enable="1"/>
         <File path="src/project_2025_11_07.cst" type="file.cst" enable="1"/>
-    </FileList>
+          <File path="src/adc/adc_top.v" type="file.verilog" enable="1"/>
+      <File path="src/adc/hal/adc_par.v" type="file.verilog" enable="1"/>
+      <File path="src/adc/hal/adc_stub.v" type="file.verilog" enable="1"/>
+      <File path="src/adc/hal/adc_spi.v" type="file.verilog" enable="1"/>
+      <File path="src/adc/abs/adc_norm.v" type="file.verilog" enable="1"/>
+      <File path="src/adc/abs/adc_cfg.v" type="file.verilog" enable="1"/>
+</FileList>
 </Project>

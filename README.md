@@ -65,6 +65,14 @@ Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj
 
 ![TD 重新打开后的工程](TD_scope_project.jpg)
 
+## 1.2 ADC 硬件抽象层与 EG4 工程（新增）
+
+- `src/adc/`：HAL（stub/并行/SPI 模板）+ ABS（归一化/CSR）+ 工厂 `adc_top`；
+- 应用层只认 `s_data / s_ch / s_valid / s_ready`，换型号只改 `IMPL` 与 `hal/` 下驱动；
+- 当前 `IMPL=1`（并行）、`RES=10`、`ALIGN=0`，行为与改造前一致；
+- `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（33 个文件、顶层 `adda_scope_top`）；
+  本机 TD 6.0.3 无 Eagle 器件库，打开会报 `Unknown device name`，详见 `FPGA_TD/eg4/README.md`。
+
 ## 2. 三步任务完成情况
 
 ### 2.1 用 TD 打开工程
