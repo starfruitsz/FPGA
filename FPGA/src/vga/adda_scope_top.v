@@ -23,7 +23,11 @@
 //   3) 串口配置通道（第二路 uart_rx + ASCII 命令解析）。
 // 注意：VGA 显示只“看” ad_date / ad_out，不干涉原来的信号通路。
 // ======================================================================
-module adda_scope_top (
+module adda_scope_top #(
+    // [P5] 串口上报方式（透传给 adda）
+    parameter integer UART_MODE = 1,   // 0=连续发送  1=按标志位定时发送
+    parameter integer REPORT_MS = 26   // 标志位模式下的上报周期(ms)
+)( 
     input  wire        sys_clk,
     input  wire        sys_rst_n,
     input  wire [9:0]  ad_date,
@@ -79,7 +83,10 @@ module adda_scope_top (
 // [原有工程] 端口一一对应，内部逻辑完全没有改动。
 // ad_out 既送给 DAC，也送给示波器的 CH1，用来观察控制量。
 //------------------------------------------------------------------
-    adda u_adda (
+    adda #(
+        .UART_MODE(UART_MODE),
+        .REPORT_MS(REPORT_MS)
+    ) u_adda (
         .sys_clk  (sys_clk),
         .sys_rst_n(sys_rst_n),
         .ad_date  (ad_date),

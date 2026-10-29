@@ -22,11 +22,19 @@ module adda
 //------------------------------------------------------------------------------
 // 参数区:
 //   CNT_DATA_MAX : rtl 中值累加样本数(1024 次), 本模块仅作占位, 未使用
-//   CNT_MAX      : 26ms 定时器上限 1299999; 50MHz 下 (1299999+1)/50MHz = 26ms
-//                  该值用于产生 pi_flag（每 26ms 一次），已接到 uart_tx 定速上报
+//   UART_MODE    : [P5 开关] 0 = 连续发送(pi_flag 恒 1)
+//                            1 = 按定时标志位发送(默认)
+//   CLK_FREQ     : 系统时钟频率, 用于把 REPORT_MS 换算成计数值
+//   REPORT_MS    : [P5 可配置] 标志位模式下的上报周期(毫秒)
+//   CNT_MAX      : 由 REPORT_MS 推导: 50MHz 下 26ms -> 1,299,999
+//                  例: 10ms -> 499,999; 100ms -> 4,999,999
+//                  计数器已加宽到 32bit, 支持更长周期
 //------------------------------------------------------------------------------
-    parameter CNT_DATA_MAX=11'd1024, 
-    parameter CNT_MAX = 25'd12_999_9 
+    parameter CNT_DATA_MAX = 11'd1024, 
+    parameter integer UART_MODE = 1,          // 0=连续 1=标志位
+    parameter integer CLK_FREQ  = 50_000_000, 
+    parameter integer REPORT_MS = 26,         // 上报周期(ms)
+    parameter integer CNT_MAX   = (CLK_FREQ/1000)*REPORT_MS - 1
 ) 
 
 (
@@ -91,7 +99,7 @@ reg po_flag2;
 reg po_flag3; //16位信号完整接收标志位 
 
 reg pi_flag; 
-reg [24:0] cnt; 
+reg [31:0] cnt;          // [P5] 加宽到 32bit，支持更长上报周期
 reg [15:0] rx_date; 
 
 reg [11:0] c_date; 
@@ -155,21 +163,21 @@ always@(posedge sys_clk or negedge sys_rst_n)
 // //八位最大 255，因转换 10 进制最大 99 
  
 //------------------------------------------------------------------------------
-// [块 3] 26ms 自由计数器: 0~CNT_MAX 循环, 作为块 4 的节拍。
-// [修复 P5] 原来 pi_flag 没有负载、被综合删除；现已接到 uart_tx.pi_flag，
-//   因此串口从“自由连续发送”改为“每 26ms 上报一帧”，不再占满带宽。
+// [块 3] 上报定时计数器: 0 ~ CNT_MAX 循环，CNT_MAX 由 REPORT_MS 推导。
+// [修复 P5] 该计数器为块 4 提供定时标志；UART_MODE=0 时会被综合优化掉。
+//   默认 REPORT_MS=26 → 约 38 帧/秒；改参数即可调上报速率。
 //------------------------------------------------------------------------------
 always@(posedge sys_clk or negedge sys_rst_n) 
     if(sys_rst_n == 1'b0) 
-        cnt <= 25'b0; 
+        cnt <= 32'd0; 
     else if(cnt == CNT_MAX) 
-        cnt <= 25'b0; 
+        cnt <= 32'd0; 
     else 
         cnt <= cnt + 1'b1; 
  
 //------------------------------------------------------------------------------
-// [块 4] pi_flag: 每 26ms 产生一个单周期脉冲，作为 uart_tx 的发送请求。
-// [修复 P5] 已接到 uart_tx.pi_flag（见例化处），该逻辑不再是死代码。
+// [块 4] 上报脉冲: 计数到 CNT_MAX-1 时产生单周期 pi_flag，送块 4b 的 tx_req。
+//   UART_MODE=1 时每 REPORT_MS 触发一帧；UART_MODE=0 时该脉冲不使用。
 //------------------------------------------------------------------------------
 always@(posedge sys_clk or negedge sys_rst_n) 
     if(sys_rst_n == 1'b0) 
@@ -179,6 +187,14 @@ always@(posedge sys_clk or negedge sys_rst_n)
     else 
         pi_flag <= 1'b0; 
  
+//------------------------------------------------------------------------------
+// [块 4b] 发送请求选择（P5 开关）
+//   UART_MODE=0: 连续发送，pi_flag 恒为 1（原来的行为）
+//   UART_MODE=1: 每 REPORT_MS 毫秒发一帧（由块 3/4 定时，默认 26ms）
+//   UART_MODE 是常数参数，综合时未被选中的一路会被常量折叠。
+//------------------------------------------------------------------------------
+wire tx_req = (UART_MODE != 0) ? pi_flag : 1'b1;
+
 //------------------------------------------------------------------------------
 // [块 5] 16bit 串口指令组帧
 //   po_flag 是 uart_rx 收到 1 个字节的脉冲; 用 po_flag2 区分奇偶次:
@@ -360,7 +376,7 @@ uart_tx_inst
     .sys_rst_n(sys_rst_n), 
     //.pi_data(rx_date),//tx 先发低八位，所以 tx 值跟实际 rx_date 顺序颠倒，不影响 rx_date数值 
     .pi_data({ad_pingj0,ad_pingj1}), 
-    .pi_flag(pi_flag), // [修复 P5] 改为每 26ms 发一帧(原来恒接 1 占用全部串口带宽), 
+    .pi_flag(tx_req),   // [P5] UART_MODE=1 按 REPORT_MS 定时；=0 连续发送 
     
     .tx(tx) 
 ); 

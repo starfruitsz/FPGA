@@ -26,7 +26,7 @@ git revert <commit>
 | **P2** | `src/eso.v` | 符号项 `4'b1111`（补零=+15）改为 `5'sd1 / -5'sd1` | 控制律的符号补偿由 +15 变为真正的 ±1，**闭环动态会变化** | TD 分析通过 |
 | **P3** | — | 复核后撤销：32bit + 22bit 有符号相加只需 33bit，`she` 宽度足够 | 无（仅更正注释与文档说法） | 手工位宽推导 |
 | **P4** | `src/bcd.v`、`src/seg.v` | BCD 扩到 4 位并新增 `thou`；seg 增加“千位优先”显示分支 | 显示 1000~1023 不再回绕（4 位显示时最左位是数字，不显示负号） | TD 分析通过 |
-| **P5** | `src/adda.v` | `uart_tx.pi_flag` 由恒 1 改为接模块内 `pi_flag`（26ms 一次） | 串口从“自由连续发送”变为**每 26ms 上报一帧**，不再占满带宽 | TD 分析通过 |
+| **P5** | `src/adda.v`、`src/vga/adda_scope_top.v` | 新增 **`UART_MODE` 开关**（0=连续发送 / 1=按标志位定时）+ **`REPORT_MS` 可配置上报周期**；`uart_tx.pi_flag` 接 `tx_req` | 默认 26ms 一帧（约 38 帧/s）；改 `REPORT_MS` 即可调速率，`UART_MODE=0` 恢复连续发送 | TD 分析通过 |
 | **P6** | `src/seg.v` | `sel <= ~sel_reg;` 改为 `sel <= ~sel_reg[3:0];` | 无功能变化，去掉隐式截断 | TD 分析通过 |
 | **P7** | `src/seg.v` | `point[cnt_sel]` 改为 `(cnt_sel<=3) ? point[cnt_sel[1:0]] : 0` | 消除越界索引（仿真不再读 X） | TD 分析通过 |
 | **P8** | `src/divider.v` | 注释“500 分频”更正为 50000 分频 | 仅注释 | — |
@@ -85,3 +85,31 @@ project_2025_11_07.gprj     移除未例化 IP（P12）
 - `adda` 端口：`sys_clk / sys_rst_n / ad_date[9:0] / key_in / ad_clk / da_clk / rx`（与原始设计一致）；
 - `adda_scope_top` 对应恢复 `ad_clk / da_clk`，并在 `u_adda` 例化处接回；
 - TD 前端分析 27 个文件通过，端口连接检查 0 错误。
+
+### P5 配置方式
+
+```verilog
+// adda_scope_top.v（顶层，推荐在这里改）
+module adda_scope_top #(
+    parameter integer UART_MODE = 1,   // 0=连续发送  1=按标志位定时发送
+    parameter integer REPORT_MS = 26   // 标志位模式下的上报周期(ms)
+)(
+...
+    adda #(.UART_MODE(UART_MODE), .REPORT_MS(REPORT_MS)) u_adda (...);
+```
+
+- **连续模式**（`UART_MODE=0`）：`pi_flag` 恒为 1，发送器连续发帧（原行为，占满串口带宽）；
+- **标志位模式**（`UART_MODE=1`，默认）：计数器每 `REPORT_MS` 毫秒产生一个单周期脉冲，触发一帧；
+- 周期由 `CNT_MAX = (CLK_FREQ/1000)*REPORT_MS - 1` 自动推导，例如：
+  `50MHz` 下 `26ms → 1,299,999`、`10ms → 499,999`、`100ms → 4,999,999`；
+- 计数器已加宽到 32bit，最长可配置到约 85 秒；
+- 未选中的分支（连续模式下的定时器 / 标志位模式下的常量 1）会被综合常量折叠。
+
+一键切换示例（在 `adda_scope_top.v` 里改参数即可，不用动内部逻辑）：
+
+| 用途 | 参数 |
+|---|---|
+| 默认：每 26ms 一帧 | `UART_MODE=1, REPORT_MS=26` |
+| 高速上报：每 5ms 一帧 | `UART_MODE=1, REPORT_MS=5` |
+| 低速上报：每 200ms 一帧 | `UART_MODE=1, REPORT_MS=200` |
+| 连续发送（旧行为） | `UART_MODE=0` |
