@@ -23,7 +23,7 @@ module adda
 // 参数区:
 //   CNT_DATA_MAX : rtl 中值累加样本数(1024 次), 本模块仅作占位, 未使用
 //   CNT_MAX      : 26ms 定时器上限 1299999; 50MHz 下 (1299999+1)/50MHz = 26ms
-//                  该值用于产生 pi_flag, 但 pi_flag 在本模块中无任何负载(见下文)
+//                  该值用于产生 pi_flag（每 26ms 一次），已接到 uart_tx 定速上报
 //------------------------------------------------------------------------------
     parameter CNT_DATA_MAX=11'd1024, 
     parameter CNT_MAX = 25'd12_999_9 
@@ -35,14 +35,12 @@ module adda
 //   时钟/复位 : sys_clk(50MHz)、sys_rst_n(低有效)
 //   AD 数据   : ad_date[9:0]  外部 ADC 并行输出, 无符号 0~1023
 //   按键      : key_in        接板载按键, 1=松开, 0=按下
-//   AD/DA 外部时钟: ad_clk、da_clk 为输入端口, 但本设计中未使用(悬空被裁剪)
+//   [修复 P9] 原 ad_clk/da_clk 输入端口从未使用，已删除（避免悬空端口与误以为有外部时钟）
 //------------------------------------------------------------------------------
     input wire sys_clk, 
     input wire sys_rst_n, 
     input wire [9:0] ad_date, 
     input wire key_in, 
-    input ad_clk, 
-    input da_clk, 
     input wire rx, 
     
 //   输出时钟  : ad_clk1/da_clk1  由 divider 分频产生, 送给 AD/DA 芯片做转换时钟
@@ -102,12 +100,8 @@ reg k_flag;
 //------------------------------------------------------------------------------
 // 上电初值: po_flag2 用 initial 赋初值(TD/Gowin 支持 FF 上电初值),
 // 保证第一帧数据先写入高 8bit。综合后该寄存器带 INIT=0 属性。
-//------------------------------------------------------------------------------
-initial 
-    begin 
-        po_flag2=1'b0;
-    end 
- 
+// [修复 P10] 原来用 initial 给 po_flag2 赋初值，可综合性依赖器件特性；
+// 现已移到块 5 的复位分支里(po_flag2<=1'b0)，不再使用 initial。
 //------------------------------------------------------------------------------
 // 拆包: ad_date[7:0] -> ad_pingj0, ad_date[9:8] -> ad_pingj1(高位补 0)。
 // 串口帧格式 = {高 8bit(有效 2bit), 低 8bit}, 见 uart_tx 例化处的拼接。
@@ -159,8 +153,9 @@ always@(posedge sys_clk or negedge sys_rst_n)
 // //八位最大 255，因转换 10 进制最大 99 
  
 //------------------------------------------------------------------------------
-// [块 3] 26ms 自由计数器: 0~CNT_MAX 循环, 作为下一个块的节拍。
-// (仅驱动 pi_flag, 而 pi_flag 无负载, 综合时与块 4 一并被优化掉)
+// [块 3] 26ms 自由计数器: 0~CNT_MAX 循环, 作为块 4 的节拍。
+// [修复 P5] 原来 pi_flag 没有负载、被综合删除；现已接到 uart_tx.pi_flag，
+//   因此串口从“自由连续发送”改为“每 26ms 上报一帧”，不再占满带宽。
 //------------------------------------------------------------------------------
 always@(posedge sys_clk or negedge sys_rst_n) 
     if(sys_rst_n == 1'b0) 
@@ -171,9 +166,8 @@ always@(posedge sys_clk or negedge sys_rst_n)
         cnt <= cnt + 1'b1; 
  
 //------------------------------------------------------------------------------
-// [块 4] pi_flag: 每 26ms 产生一个单周期脉冲。
-// 实际 uart_tx 的 pi_flag 端口被固定接 1'b1(见例化处), 此信号悬空被裁剪,
-// 属历史遗留逻辑; 若改为'每 26ms 发一帧', 应把 pi_flag 接到 uart_tx。
+// [块 4] pi_flag: 每 26ms 产生一个单周期脉冲，作为 uart_tx 的发送请求。
+// [修复 P5] 已接到 uart_tx.pi_flag（见例化处），该逻辑不再是死代码。
 //------------------------------------------------------------------------------
 always@(posedge sys_clk or negedge sys_rst_n) 
     if(sys_rst_n == 1'b0) 
@@ -192,7 +186,10 @@ always@(posedge sys_clk or negedge sys_rst_n)
 //------------------------------------------------------------------------------
 always@(posedge sys_clk or negedge sys_rst_n) 
     if(sys_rst_n == 1'b0) 
-        rx_date<=16'd0; 
+        begin 
+            rx_date<=16'd0; 
+            po_flag2<=1'b0;   // [修复 P10] 复位时清组帧标志（原靠 initial）
+        end 
     else if((po_flag == 1'b1)&&(po_flag2==1'b0)) 
         begin 
             rx_date<={po_data,8'd0}; //先赋高八位 
@@ -361,7 +358,7 @@ uart_tx_inst
     .sys_rst_n(sys_rst_n), 
     //.pi_data(rx_date),//tx 先发低八位，所以 tx 值跟实际 rx_date 顺序颠倒，不影响 rx_date数值 
     .pi_data({ad_pingj0,ad_pingj1}), 
-    .pi_flag(1'b1), 
+    .pi_flag(pi_flag), // [修复 P5] 改为每 26ms 发一帧(原来恒接 1 占用全部串口带宽), 
     
     .tx(tx) 
 ); 

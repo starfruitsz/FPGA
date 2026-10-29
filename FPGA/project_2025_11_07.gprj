@@ -9,8 +9,6 @@
         <File path="src/bcd.v" type="file.verilog" enable="1"/>
         <File path="src/divider.v" type="file.verilog" enable="1"/>
         <File path="src/eso.v" type="file.verilog" enable="1"/>
-        <File path="src/fifo_top/fifo_top.v" type="file.verilog" enable="1"/>
-        <File path="src/gowin_pll/gowin_pll.v" type="file.verilog" enable="1"/>
         <File path="src/key.v" type="file.verilog" enable="1"/>
         <File path="src/rtl.v" type="file.verilog" enable="1"/>
         <File path="src/seg.v" type="file.verilog" enable="1"/>
