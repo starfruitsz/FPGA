@@ -45,35 +45,35 @@
 \toprule
 层 & 文件 & 职责\\
 \midrule
-HAL & \file{hal/vga\_timing.v} & 参数化行/场时序、同步极性、\sig{pix\_ce} 像素节拍\\
-HAL & \file{hal/vram\_sdp.v} & 1 写 1 读 RAM 封装（推断 BSRAM）\\
-HAL & \file{hal/font\_rom.v} & 8$\times$8 点阵字模（分布式 ROM）\\
+HAL & \file{hal/vga_timing.v} & 参数化行/场时序、同步极性、\sig{pix_ce} 像素节拍\\
+HAL & \file{hal/vram_sdp.v} & 1 写 1 读 RAM 封装（推断 BSRAM）\\
+HAL & \file{hal/font_rom.v} & 8$\times$8 点阵字模（分布式 ROM）\\
 \midrule
-ABS & \file{abs/grid\_layer.v} & 网格与零电平轴\\
-ABS & \file{abs/trace\_layer.v} & 单通道波形（相邻采样连竖线）\\
-ABS & \file{abs/text\_layer.v} & 2 行 $\times$ 32 列文本 + 5 个十六进制数字域\\
+ABS & \file{abs/grid_layer.v} & 网格与零电平轴\\
+ABS & \file{abs/trace_layer.v} & 单通道波形（相邻采样连竖线）\\
+ABS & \file{abs/text_layer.v} & 2 行 $\times$ 32 列文本 + 5 个十六进制数字域\\
 ABS & \file{abs/compositor.v} & 图层优先级合成（文字 $>$ CH1 $>$ CH0 $>$ 网格）\\
 \midrule
-APP & \file{app/scope\_capture.v} & 采样分频、写指针、触发对齐\\
-APP & \file{app/scope\_meas.v} & 峰峰值与过零计数（自动测量）\\
-APP & \file{app/scope\_cmd.v} & ASCII 命令解析（串口在线配置）\\
-APP & \file{app/scope\_app.v} & 时基/触发/滚动寄存器与按键仲裁\\
-APP & \file{app/scope\_ui.v} & 按键去抖、短按/长按识别\\
+APP & \file{app/scope_capture.v} & 采样分频、写指针、触发对齐\\
+APP & \file{app/scope_meas.v} & 峰峰值与过零计数（自动测量）\\
+APP & \file{app/scope_cmd.v} & ASCII 命令解析（串口在线配置）\\
+APP & \file{app/scope_app.v} & 时基/触发/滚动寄存器与按键仲裁\\
+APP & \file{app/scope_ui.v} & 按键去抖、短按/长按识别\\
 \midrule
-TOP & \file{vga\_scope\_top.v} & 参数集中处、特性开关、像素流水线对齐\\
-TOP & \file{vga\_test\_top.v} & 屏幕自检顶层（\sig{TEST\_MODE} = 1 时使用）\\
-TOP & \file{adda\_scope\_top.v} & 原 \texttt{adda} + 示波器 + 串口配置（新 Top）\\
+TOP & \file{vga_scope_top.v} & 参数集中处、特性开关、像素流水线对齐\\
+TOP & \file{vga_test_top.v} & 屏幕自检顶层（\sig{TEST_MODE} = 1 时使用）\\
+TOP & \file{adda_scope_top.v} & 原 \texttt{adda} + 示波器 + 串口配置（新 Top）\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-数据通路为：外部 ADC 码值 \sig{ad\_date} 与 DAC 输出 \sig{ad\_out} 分别进入两个采样缓存，
+数据通路为：外部 ADC 码值 \sig{ad_date} 与 DAC 输出 \sig{ad_out} 分别进入两个采样缓存，
 按可配置速率循环写入；显示时每个像素列读取相邻两个采样点，映射为 y 坐标后用一条竖线
 连接，形成波形。整条链路没有帧缓存。
 
 \subsection{特性开关}
 
-四个特性各自对应一个 \sig{localparam}，集中在 \file{adda\_scope\_top.v} 顶部，
+四个特性各自对应一个 \sig{localparam}，集中在 \file{adda_scope_top.v} 顶部，
 改一行即可开关（0 = 关闭，1 = 开启）：
 
 \begin{lstlisting}[style=vsnip]
@@ -91,14 +91,14 @@ localparam integer FEAT_UART   = 1;   // 特性4 串口在线配置
 \toprule
 开关 & 特性 & 关闭后的行为\\
 \midrule
-\sig{FEAT\_TRIG} & 触发对齐：检测电平穿越，命中时写指针归零 &
+\sig{FEAT_TRIG} & 触发对齐：检测电平穿越，命中时写指针归零 &
 自由采集，周期信号左右轻微漂移\\
-\sig{FEAT\_MEAS} & 自动测量：帧内统计 min/max 与过零次数 &
+\sig{FEAT_MEAS} & 自动测量：帧内统计 min/max 与过零次数 &
 测量模块整块不例化，第二行显示 0\\
-\sig{FEAT\_SCROLL} & 滚动显示：帧起始锁存写指针，读地址 base$-$640$+$px &
+\sig{FEAT_SCROLL} & 滚动显示：帧起始锁存写指针，读地址 base$-$640$+$px &
 读地址退化为 \sig{px}，只显示前 640 点\\
-\sig{FEAT\_UART} & 串口在线配置：独立第二路 \texttt{uart\_rx} &
-\sig{cfg\_*} 被忽略，仅保留按键\\
+\sig{FEAT_UART} & 串口在线配置：独立第二路 \texttt{uart\_rx} &
+\sig{cfg_*} 被忽略，仅保留按键\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -107,7 +107,7 @@ localparam integer FEAT_UART   = 1;   // 特性4 串口在线配置
 
 \subsubsection{引脚表格式}
 
-引脚全部外置在 \file{FPGA/src/vga/pins/scope\_pins.csv} 中，每行描述一个物理引脚：
+引脚全部外置在 \file{FPGA/src/vga/pins/scope_pins.csv} 中，每行描述一个物理引脚：
 
 \begin{lstlisting}[style=cfgcode,numbers=none]
 # 端口名, 引脚, 方向, 驱动mA(输入填 0), 上下拉, Bank电压, 说明
@@ -117,7 +117,7 @@ vga_hs,T11,out,8,NONE,3.3,VGA HSYNC
 vga_rgb[11],U13,out,8,NONE,3.3,R1 -> 270R
 \end{lstlisting}
 
-端口名支持任意位（如 \sig{ad\_date[3]}、\sig{vga\_rgb[11]}），方向为
+端口名支持任意位（如 \sig{ad_date[3]}、\sig{vga_rgb[11]}），方向为
 \sig{in}/\sig{out}；输入行不需要驱动电流。
 
 \subsubsection{生成约束}
@@ -136,7 +136,7 @@ IO_PORT "vga_hs" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
 \end{lstlisting}
 
 生成结果可整体替换工程约束，或只把需要的行合并进
-\file{FPGA/src/project\_2025\_11\_07.cst}。本工程已把 8 条 VGA 约束合并进该文件，
+\file{FPGA/src/project_2025_11_07.cst}。本工程已把 8 条 VGA 约束合并进该文件，
 工程约束共 38 个端口（30 个原有 + 8 个 VGA），端口与引脚均唯一、无冲突。
 
 \subsubsection{本工程实际分配的 VGA 引脚}
@@ -154,14 +154,14 @@ IO_PORT "vga_hs" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
 \toprule
 端口 & 引脚 & Site & 接法\\
 \midrule
-\sig{vga\_hs} & T11 & IOB45[B] & DE-15 脚 13\\
-\sig{vga\_vs} & T12 & IOB43[A] & DE-15 脚 14\\
-\sig{vga\_rgb[11]}（R1） & U13 & IOB50[A] & 串联 270$\Omega$\\
-\sig{vga\_rgb[10]}（R0） & R10 & IOB35[A] & 串联 560$\Omega$\\
-\sig{vga\_rgb[7]}（G1） & U11 & IOB39[A] & 串联 270$\Omega$\\
-\sig{vga\_rgb[6]}（G0） & N12 & IOB52[A] & 串联 560$\Omega$\\
-\sig{vga\_rgb[3]}（B1） & V14 & IOB54[B] & 串联 270$\Omega$\\
-\sig{vga\_rgb[2]}（B0） & M11 & IOB48[A] & 串联 560$\Omega$\\
+\sig{vga_hs} & T11 & IOB45[B] & DE-15 脚 13\\
+\sig{vga_vs} & T12 & IOB43[A] & DE-15 脚 14\\
+\sig{vga_rgb[11]}（R1） & U13 & IOB50[A] & 串联 270$\Omega$\\
+\sig{vga_rgb[10]}（R0） & R10 & IOB35[A] & 串联 560$\Omega$\\
+\sig{vga_rgb[7]}（G1） & U11 & IOB39[A] & 串联 270$\Omega$\\
+\sig{vga_rgb[6]}（G0） & N12 & IOB52[A] & 串联 560$\Omega$\\
+\sig{vga_rgb[3]}（B1） & V14 & IOB54[B] & 串联 270$\Omega$\\
+\sig{vga_rgb[2]}（B0） & M11 & IOB48[A] & 串联 560$\Omega$\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -172,7 +172,7 @@ RGB 采用“2 bit/色 + 电阻网络”的简易 DAC：每通道高 bit 串 270
 
 \subsection{视频格式配置}
 
-分辨率与时序全部是 \file{vga\_scope\_top.v} 的 parameter，默认 640$\times$480：
+分辨率与时序全部是 \file{vga_scope_top.v} 的 parameter，默认 640$\times$480：
 
 \begin{table}[htbp]
 \centering
@@ -189,7 +189,7 @@ RGB 采用“2 bit/色 + 电阻网络”的简易 DAC：每通道高 bit 串 270
 \end{tabular}
 \end{table}
 
-像素节拍由 \sig{PIX\_DIV} 参数控制：640$\times$480 取 2，即 50MHz 二分频得到 25MHz，
+像素节拍由 \sig{PIX_DIV} 参数控制：640$\times$480 取 2，即 50MHz 二分频得到 25MHz，
 \textbf{不需要 PLL}；800$\times$600 与 1024$\times$768 需要 40/65MHz，可复用工程中
 已有的 \texttt{Gowin\_PLL} IP（50MHz 输入，1024$\times$768 取 VCO = 50$\times$13 = 650MHz、
 ODIV = 10）。换分辨率时需同步调整绘图区参数：
@@ -200,10 +200,10 @@ ODIV = 10）。换分辨率时需同步调整绘图区参数：
 \toprule
 参数 & 默认值 & 含义\\
 \midrule
-\sig{PLOT\_H} & 448 & 绘图区高度（16 的倍数，便于取模）\\
-\sig{AXIS\_Y} & 224 & 零电平轴位置（约 PLOT\_H/2）\\
-\sig{TEXT\_Y0} & 448 & 文本区起始行\\
-\sig{GRID\_STEP} & 64 & 网格间距（建议取 2 的幂）\\
+\sig{PLOT_H} & 448 & 绘图区高度（16 的倍数，便于取模）\\
+\sig{AXIS_Y} & 224 & 零电平轴位置（约 PLOT\_H/2）\\
+\sig{TEXT_Y0} & 448 & 文本区起始行\\
+\sig{GRID_STEP} & 64 & 网格间距（建议取 2 的幂）\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -218,7 +218,7 @@ ODIV = 10）。换分辨率时需同步调整绘图区参数：
 \toprule
 操作 & 效果\\
 \midrule
-短按 \sig{key\_in}（$<$800ms） & 时基 8 档循环：1k/5k/25k/100k/500k/5M/50M S/s\\
+短按 \sig{key_in}（$<$800ms） & 时基 8 档循环：1k/5k/25k/100k/500k/5M/50M S/s\\
 长按（$\ge$800ms） & 运行 / 冻结\\
 \bottomrule
 \end{tabular}
@@ -238,7 +238,7 @@ ODIV = 10）。换分辨率时需同步调整绘图区参数：
 \toprule
 命令 & 例子 & 含义\\
 \midrule
-\sig{T<hex4>} & \sig{T0063} & 设置采样分频 \sig{tb\_div}（约 500 kS/s）\\
+\sig{T<hex4>} & \sig{T0063} & 设置采样分频 \sig{tb_div}（约 500 kS/s）\\
 \sig{R<0/1>} & \sig{R0} & 冻结 / 运行\\
 \sig{A<0/1>} & \sig{A1} & 触发使能\\
 \sig{L<hex3>} & \sig{L200} & 触发电平（0$\sim$3FF）\\
@@ -271,7 +271,7 @@ ODIV = 10）。换分辨率时需同步调整绘图区参数：
 
 每个像素周期依次完成：读采样 RAM（同步读，1 拍延迟）$\rightarrow$ 相邻两点各自映射
 y 坐标 $\rightarrow$ 用竖线填满两点之间 $\rightarrow$ 在像素周期后半拍求值、
-\sig{pix\_ce} 时打入输出寄存器；\sig{hs}/\sig{vs}/\sig{de} 固定延迟 2 拍（正好 1 像素）
+\sig{pix_ce} 时打入输出寄存器；\sig{hs}/\sig{vs}/\sig{de} 固定延迟 2 拍（正好 1 像素）
 以保持对齐。坐标映射为
 
 \begin{equation}
@@ -304,8 +304,8 @@ $y=224$。
 \subsection{屏幕自检程序（TEST\_MODE）}
 
 为便于上板前判断“屏幕能否正常显示”，另提供一个与示波器功能\textbf{完全解耦}的自检程序。
-它只新增两个文件（\file{app/vga\_test\_app.v} 图案发生器、\file{vga\_test\_top.v} 自检顶层），
-并\textbf{复用} HAL 的 \file{vga\_timing.v}、\file{font\_rom.v} 与 APP 的 \file{scope\_ui.v}
+它只新增两个文件（\file{app/vga_test_app.v} 图案发生器、\file{vga_test_top.v} 自检顶层），
+并\textbf{复用} HAL 的 \file{vga_timing.v}、\file{font_rom.v} 与 APP 的 \file{scope_ui.v}
 按键去抖，\textbf{没有修改 \file{hal/}、\file{abs/} 中任何封装}。
 
 \begin{table}[htbp]
@@ -316,8 +316,8 @@ $y=224$。
 \toprule
 方式 & 操作\\
 \midrule
-只测屏 & Gowin 中把 Top Module 设为 \sig{vga\_test\_top}（引脚与示波器工程相同）\\
-复用主工程 & 把 \file{adda\_scope\_top.v} 中的 \sig{TEST\_MODE} 置 1 再综合，VGA 口输出自检图案，
+只测屏 & Gowin 中把 Top Module 设为 \sig{vga_test_top}（引脚与示波器工程相同）\\
+复用主工程 & 把 \file{adda_scope_top.v} 中的 \sig{TEST_MODE} 置 1 再综合，VGA 口输出自检图案，
 AD/DA 通路不受影响（拔掉模拟板也能测）\\
 \bottomrule
 \end{tabular}
@@ -343,8 +343,10 @@ AD/DA 通路不受影响（拔掉模拟板也能测）\\
 \end{table}
 
 图案逻辑为纯组合（仅模式与移动计数器用时序），不占 BSRAM 与 DSP，估计约 400 LUT；
-输出级沿用与 \file{vga\_scope\_top.v} 相同的“2 拍（1 像素）对齐”寄存方式，
+输出级沿用与 \file{vga_scope_top.v} 相同的“2 拍（1 像素）对齐”寄存方式，
 因此两种顶层可以\textbf{共用同一套引脚约束}，切换 Top 无需改 PCB。
+
+自检程序的结构、逐块代码解析与判读方法见第 16 章。
 
 \subsection{验证状态与限制}
 

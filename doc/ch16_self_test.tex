@@ -1,0 +1,303 @@
+% =====================================================================
+%  ch16_self_test.tex -- 第 16 章 屏幕自检程序解析
+% =====================================================================
+\section{屏幕自检程序解析（\file{vga_test_app.v} / \file{vga_test_top.v}）}
+
+\subsection{设计目标与分层约束}
+
+上板调试时，最怕“屏幕不亮却不知道是 FPGA、接线还是显示器的问题”。为此在
+\textbf{应用层}增加一个与示波器功能完全解耦的自检程序：它不依赖 AD/DA 数据通路，
+只使用系统时钟、复位与按键，把 5 幅标准测试画面送到 VGA 端口。
+
+设计约束如下：
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item 只新增两个上层文件，不修改 \file{hal/} 与 \file{abs/} 中任何封装；
+  \item 复用已有接口：时序直接例化 \file{hal/vga_timing.v}，字模直接例化
+        \file{hal/font_rom.v}，按键去抖直接例化 \file{app/scope_ui.v}；
+  \item 输出级与 \file{vga_scope_top.v} 完全一致（2 拍 = 1 像素对齐），
+        因此两种顶层可共用同一套引脚约束，切换 Top 不改 PCB。
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{自检程序复用的下层模块}
+\begin{tabular}{lllp{5.4cm}}
+\toprule
+模块 & 层 & 接口 & 用途\\
+\midrule
+\file{vga_timing.v} & HAL & \sig{clk/rst/pix_ce/hs/vs/de/px/py} & 产生 640$\times$480 时序与像素坐标\\
+\file{font_rom.v} & HAL & \sig{ch/row/bits} & 8$\times$8 字模，用于第 5 幅文字画面\\
+\file{scope_ui.v} & APP & \sig{key_in/ev_short} & 20ms 去抖 + 短按事件（切换画面）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{\file{vga_test_top.v}：自检顶层}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 内容\\
+\midrule
+行数 & 132 行\\
+端口 & \sig{clk/rst/key_in} 输入；\sig{vga_rgb[11:0]/vga_hs/vga_vs/vga_de} 输出\\
+参数 & 与 \file{vga_scope_top.v} 相同的时序参数，外加 \sig{AUTO_FRAMES}（默认 120 帧）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{块 1：时序例化（29--45 行）}
+
+\begin{lstlisting}[style=vsnip]
+vga_timing #(
+    .H_VIS(H_VIS), .H_FP(H_FP), .H_SYNC(H_SYNC), .H_BP(H_BP),
+    .V_VIS(V_VIS), .V_FP(V_FP), .V_SYNC(V_SYNC), .V_BP(V_BP),
+    .H_POL(H_POL), .V_POL(V_POL), .PIX_DIV(PIX_DIV)
+) u_timing (
+    .clk(clk), .rst(rst), .pix_ce(pix_ce),
+    .hs(hs), .vs(vs), .de(de), .px(px), .py(py)
+);
+\end{lstlisting}
+
+自检顶层没有采样、没有缓存，直接把 HAL 时序的输出坐标交给图案发生器；参数全部
+透传，所以换分辨率时与示波器一样只改顶层参数。
+
+\subsubsection{块 2：帧起始脉冲（48--50 行）}
+
+\begin{lstlisting}[style=vsnip]
+reg vs_d;
+always @(posedge clk) vs_d <= vs;
+wire frame = vs & (~vs_d);
+\end{lstlisting}
+
+对场同步信号取上升沿，得到一个时钟宽的 \sig{frame} 脉冲。它驱动三件事：
+自动换画面的计数、移动方块的推进、以及（示波器里的）滚动基准。本设计采用负极性
+同步（\sig{V_POL=0}），场同步的上升沿正好落在消隐结束处，因此与“帧首”对齐。
+
+\subsubsection{块 3：按键复用（52--64 行）}
+
+\begin{lstlisting}[style=vsnip]
+scope_ui #(.CLK_HZ(50_000_000), .DB_MS(20), .LONG_MS(800)) u_key (
+    .clk(clk), .rst(rst), .key_in(key_in),
+    .ev_short(ev_next), .ev_long(ev_long_unused)
+);
+\end{lstlisting}
+
+直接复用示波器的按键模块，不重复实现消抖；长按事件在自检模式中不使用。
+
+\subsubsection{块 4：图案例化（66--80 行）}
+
+\begin{lstlisting}[style=vsnip]
+vga_test_app #(
+    .H_VIS(H_VIS), .V_VIS(V_VIS),
+    .AUTO_FRAMES(AUTO_FRAMES), .COL_BG(COL_BG)
+) u_app (
+    .clk(clk), .rst(rst), .ev_next(ev_next), .frame(frame),
+    .px(px), .py(py), .de(de), .rgb(rgb_comb), .mode_o()
+);
+\end{lstlisting}
+
+图案模块只接收“当前像素坐标 + 有效区 + 事件”，返回该像素的颜色，属于典型的
+\textbf{流式渲染}接口，不需要帧缓存。
+
+\subsubsection{块 5：输出寄存与对齐（85--112 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk) begin
+    if (rst) begin rgb_r <= COL_BG; hs1 <= 1; hs2 <= 1; ... end
+    else begin
+        hs1 <= hs; hs2 <= hs1;
+        vs1 <= vs; vs2 <= vs1;
+        de1 <= de; de2 <= de1;
+        if (pix_ce) rgb_r <= rgb_comb;
+    end
+end
+\end{lstlisting}
+
+像素在 \sig{pix_ce} 时打入寄存器，同步信号固定延迟 2 拍（因为像素周期为 2 个
+时钟，正好等于 1 个像素），从而与 \sig{rgb_r} 对齐——与示波器顶层完全相同的处理，
+保证两种顶层的时序行为一致。
+
+\subsection{\file{vga_test_app.v}：图案发生器}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 内容\\
+\midrule
+行数 & 198 行\\
+参数 & \sig{H_VIS=640}、\sig{V_VIS=480}、\sig{AUTO_FRAMES=120}、\sig{COL_BG}\\
+端口 & \sig{clk/rst/ev_next/frame/px/py/de} 输入；\sig{rgb[11:0]}、\sig{mode_o[2:0]} 输出\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{块 1：模式与动画计数（40--76 行）}
+
+\begin{lstlisting}[style=vsnip]
+if (frame) begin
+    pos <= (pos >= 10'd592) ? 10'd0 : (pos + 10'd4);
+    if (auto_cnt == (AUTO_FRAMES-1)) begin
+        auto_cnt <= 8'd0;
+        mode     <= (mode == (NMODE-1)) ? 3'd0 : (mode + 3'd1);
+    end
+    else auto_cnt <= auto_cnt + 8'd1;
+end
+if (ev_next) begin
+    mode     <= (mode == (NMODE-1)) ? 3'd0 : (mode + 3'd1);
+    auto_cnt <= 8'd0;
+end
+\end{lstlisting}
+
+\begin{itemize}[leftmargin=2em,itemsep=1pt]
+  \item \sig{auto_cnt} 计满 \sig{AUTO_FRAMES}（默认 120 帧，约 2s）后切换画面；
+  \item \sig{ev_next}（按键短按）立即切换并把自动计数清零，按键优先级更高；
+  \item \sig{pos} 每帧加 4 像素，到 592（$640-48$，即方块刚好贴右边界）回卷到 0，
+        因此移动方块在 2.5 秒左右扫过一屏。
+\end{itemize}
+
+\subsubsection{块 2：彩条画面（78--96 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire [2:0] bar_idx = px[8:6];
+always @(*) begin
+    case (bar_idx)
+        3'd0: bar_col = 12'hFFF;   // 白
+        3'd1: bar_col = 12'hFF0;   // 黄
+        ...
+        default: bar_col = 12'h000; // 黑
+    endcase
+end
+\end{lstlisting}
+
+取像素列号的高 3 位（每 64 像素一段）作为色条索引，8 色轮转。由于 640 像素可分为
+10 段，最后两段会重复白/黄，属于预期现象。该画面用于检查 \sig{vga_rgb[11:10]}、
+\sig{[7:6]}、\sig{[3:2]} 与显示器 RGB 的对应关系以及电阻网络的电平。
+
+\subsubsection{块 3：灰阶画面（98--101 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire [3:0] gray_lvl = py[8:6];          // 0..7
+wire [11:0] gray_col = {gray_lvl, gray_lvl, gray_lvl};
+\end{lstlisting}
+
+用行号的高 3 位产生 8 级灰度，R=G=B，用来判断三个通道的增益是否一致
+（若某一级偏色，说明该通道的电阻比例或焊接有问题）。
+
+\subsubsection{块 4：棋盘格（103--105 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire chk = px[5] ^ py[5];
+\end{lstlisting}
+
+每 32 像素翻转一次，形成 32$\times$32 的黑白棋盘。该项对“像素时钟是否稳定、
+行场同步是否抖动”最敏感：若出现斜纹、抖动或局部错位，通常是像素时钟或同步时序问题。
+
+\subsubsection{块 5：边框、十字与移动方块（107--116 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire border = (px < 4) || (px >= H_VIS-4) || (py < 4) || (py >= V_VIS-4);
+wire cross  = ((py >= 238) && (py <= 241)) || ((px >= 318) && (px <= 321));
+wire [11:0] box_x = {2'b00, pos};
+wire moving = (px >= box_x) && (px < box_x + 48) && (py >= 200) && (py < 248);
+\end{lstlisting}
+
+4 像素宽的白色边框检查“满屏是否被裁切”，红色十字检查画面中心与几何比例，
+48$\times$48 的绿色方块逐帧右移，用来确认帧刷新与无撕裂。
+
+\subsubsection{块 6：文字画面（118--166 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire in_t0 = (px >= tx0) && (px < tx0+64) && (py >= ty0) && (py < ty0+8);
+wire in_t1 = (px >= tx1) && (px < tx1+96) && (py >= ty1) && (py < ty1+8);
+...
+wire [5:0] ch_sel  = in_t1 ? code1 : code0;
+wire [2:0] row_sel = in_t1 ? r1 : r0;
+font_rom u_font (.ch(ch_sel), .row(row_sel), .bits(font_bits));
+wire [2:0] bit_idx = in_t1 ? (px - tx1) : (px - tx0);
+wire text_hit = (in_t0 || in_t1) && font_bits[3'd7 - bit_idx];
+\end{lstlisting}
+
+两行文字“VGA TEST”与“640X480 60HZ”分别位于 $y=200$ 与 $y=232$，水平居中；
+字符码由 \sig{case(col)} 常量表给出（V/G/A/空格/T/E/S 与 6/4/0/X/4/8/0/空格/6/0/H/Z），
+只用一个 \file{font_rom} 实例，按“当前所在行”多路选择输入，因此字模资源只有一份。
+
+\subsubsection{块 7：画面选择（168--186 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(*) begin
+    if (!de) rgb = COL_BG;
+    else case (mode)
+        3'd0: rgb = bar_col;
+        3'd1: rgb = gray_col;
+        3'd2: rgb = chk ? 12'hFFF : 12'h000;
+        3'd3: rgb = border ? 12'hFFF : cross ? 12'hF00 : moving ? 12'h0F0 : COL_BG;
+        3'd4: rgb = text_hit ? 12'hFFF : COL_BG;
+        default: rgb = COL_BG;
+    endcase
+end
+\end{lstlisting}
+
+消隐区（\sig{de=0}）统一输出背景色，避免把随机颜色带到消隐期；五个画面通过
+\sig{mode} 选择，全部为组合逻辑。
+
+\subsection{自检画面的判读方法}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{自检画面与对应的硬件检查点}
+\begin{tabular}{clp{7.8cm}}
+\toprule
+编号 & 画面 & 检查点\\
+\midrule
+0 & 8 色竖条 & RGB 三路是否都在、位序是否正确、颜色是否饱和\\
+1 & 8 级灰阶 & 灰阶是否单调、有无台阶丢失（位宽/电阻比例）\\
+2 & 棋盘格 & 像素时钟与行场同步是否稳定、有无撕裂/斜纹\\
+3 & 边框+十字+方块 & 满屏是否被 overscan 裁切、中心是否居中、动画是否流畅\\
+4 & 文字 & 字模取字是否正确、像素是否 1:1 对齐\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{常见现象与原因对照}
+\begin{tabular}{p{4.2cm}p{9.6cm}}
+\toprule
+现象 & 可能原因\\
+\midrule
+全黑、显示器提示无信号 & HS/VS（T11/T12）未接、接反或极性错；先量同步脚\\
+有画面但偏色/缺色 & RGB 某一位未接、270$\Omega$/560$\Omega$ 接反、BankVccio 不是 3.3V\\
+画面滚动、斜纹 & 像素时钟不对（确认 50MHz 与 \sig{PIX_DIV=2}）或同步极性错\\
+只有部分区域或偏移 & 显示器 overscan，或时序参数与该显示器支持的模式不符\\
+棋盘闪烁/抖动 & 电源纹波、时钟质量、VGA 线材过长\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{资源与验证}
+
+图案发生器除模式计数与移动计数器外均为组合逻辑，估计约 400 LUT（不含时序模块），
+占用 2 个 8bit 字模行查询和一个 12bit 输出寄存器，不占 BSRAM 与 DSP。
+
+验证结果：
+
+\begin{itemize}[leftmargin=2em,itemsep=1pt]
+  \item TD 6.0.3 前端分析：27 个源文件全部通过（含本章两个文件），
+        仅剩原工程既有的 \sig{BAUD_CNT_MAX} 提示；
+  \item 自写端口连接检查：25 个模块、31 处例化，0 个未定义端口；
+  \item 未做 RTL 仿真与上板：上板时建议先烧 \sig{TEST_MODE=1} 版本确认屏幕，
+        再切回示波器功能。
+\end{itemize}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/vga/vga_test_top.v}
+
+\lstinputlisting[style=vcode]{../FPGA/src/vga/app/vga_test_app.v}
