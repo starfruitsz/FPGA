@@ -28,7 +28,8 @@ module adda_scope_top (
     input  wire        sys_rst_n,
     input  wire [9:0]  ad_date,
     input  wire        key_in,
-    // [修复 P9] 删除未使用的 ad_clk/da_clk 输入端口
+    input  wire        ad_clk,
+    input  wire        da_clk,
 
     input  wire        rx,
 
@@ -83,7 +84,9 @@ module adda_scope_top (
         .sys_rst_n(sys_rst_n),
         .ad_date  (ad_date),
         .key_in   (key_in),
-
+        .ad_clk   (ad_clk),   // P9 已回撤：保留端口(本设计未使用)
+        .da_clk   (da_clk),
+        .rx       (rx),
         .rx       (rx),
         .ad_clk1  (ad_clk1),
         .da_clk1  (da_clk1),

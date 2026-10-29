@@ -35,12 +35,14 @@ module adda
 //   时钟/复位 : sys_clk(50MHz)、sys_rst_n(低有效)
 //   AD 数据   : ad_date[9:0]  外部 ADC 并行输出, 无符号 0~1023
 //   按键      : key_in        接板载按键, 1=松开, 0=按下
-//   [修复 P9] 原 ad_clk/da_clk 输入端口从未使用，已删除（避免悬空端口与误以为有外部时钟）
+//   AD/DA 外部时钟: ad_clk、da_clk 为输入端口(本设计未使用, 综合会裁剪, 端口保留)
 //------------------------------------------------------------------------------
     input wire sys_clk, 
     input wire sys_rst_n, 
     input wire [9:0] ad_date, 
     input wire key_in, 
+    input ad_clk, 
+    input da_clk, 
     input wire rx, 
     
 //   输出时钟  : ad_clk1/da_clk1  由 divider 分频产生, 送给 AD/DA 芯片做转换时钟

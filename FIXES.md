@@ -30,7 +30,7 @@ git revert <commit>
 | **P6** | `src/seg.v` | `sel <= ~sel_reg;` 改为 `sel <= ~sel_reg[3:0];` | 无功能变化，去掉隐式截断 | TD 分析通过 |
 | **P7** | `src/seg.v` | `point[cnt_sel]` 改为 `(cnt_sel<=3) ? point[cnt_sel[1:0]] : 0` | 消除越界索引（仿真不再读 X） | TD 分析通过 |
 | **P8** | `src/divider.v` | 注释“500 分频”更正为 50000 分频 | 仅注释 | — |
-| **P9** | `src/adda.v`、`src/vga/adda_scope_top.v`、`.cst` | 删除从未使用的 `ad_clk`/`da_clk` 输入端口 | 顶层端口减少 2 个（原端口本就无约束、被综合裁剪） | TD 分析 + 端口检查 |
+| **P9** | — | **已回撤**（见第 6 节）：保留 `ad_clk`/`da_clk` 输入端口 | 无（端口未使用，综合会自动裁剪，仅保留接口兼容） | TD 分析 + 端口检查 |
 | **P10** | `src/adda.v` | 删除 `initial` 初值，改为在块 5 复位分支里清 `po_flag2` | 可综合性更好，行为不变 | TD 分析通过 |
 | **P11** | `src/project_2025_11_07.cst` | 补上数码管 `sel[3:0]`/`seg[7:0]` 共 12 个引脚约束（取自 PnR 报告） | 重新布局后数码管引脚不再漂移 | 约束共 50 个端口，端口/引脚均唯一 |
 | **P12** | `project_2025_11_07.gprj` | 从工程文件列表移除未例化的 `gowin_pll.v`/`fifo_top.v` | 工程与网表一致；文件仍保留在磁盘 | 文件数 28 → 26 |
@@ -44,12 +44,12 @@ git revert <commit>
 ## 3. 改动文件一览
 
 ```
-src/adda.v                  端口/初值/pi_flag（P5 P9 P10）
+src/adda.v                  端口/初值/pi_flag（P5 P10；P9 已回撤）
 src/eso.v                   参数优先级/符号项（P1 P2，P3 注释更正）
 src/bcd.v                   4 位 BCD（P4）
 src/seg.v                   4 位显示 + 越界保护（P4 P6 P7）
 src/divider.v               注释更正（P8）
-src/vga/adda_scope_top.v    删除 ad_clk/da_clk 端口（P9）
+src/vga/adda_scope_top.v    P9 已回撤（保留 ad_clk/da_clk 端口与连线）
 src/project_2025_11_07.cst  数码管引脚约束（P11）
 project_2025_11_07.gprj     移除未例化 IP（P12）
 ```
@@ -71,3 +71,17 @@ project_2025_11_07.gprj     移除未例化 IP（P12）
 - 数码管在 1000 以上不再显示负号（4 位已占满），如需符号+4 位需要 5 位数码管或改显示内容；
 - 触发对齐仍有 ±1 采样误差，串口 ASCII 命令与二进制帧共用线路（VGA 部分，风险低）；
 - SDRAM/BSRAM 相关 IP 未使用，已从工程移除但文件保留。
+
+---
+
+## 6. 回撤记录
+
+| 日期 | 编号 | 内容 | 原因 |
+|---|---|---|---|
+| 2026-10-29 | P9 | 恢复 `adda.v` 的 `ad_clk`/`da_clk` 输入端口，以及 `adda_scope_top.v` 的对应端口与连线 | 按需求保留原有接口，避免下游引用这两个信号时出错；端口未使用，综合时会自动裁剪，不增加资源 |
+
+回撤后状态：
+
+- `adda` 端口：`sys_clk / sys_rst_n / ad_date[9:0] / key_in / ad_clk / da_clk / rx`（与原始设计一致）；
+- `adda_scope_top` 对应恢复 `ad_clk / da_clk`，并在 `u_adda` 例化处接回；
+- TD 前端分析 27 个文件通过，端口连接检查 0 错误。
