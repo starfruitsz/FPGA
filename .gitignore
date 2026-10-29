@@ -1,0 +1,18 @@
+# 构建输出 / 大文件
+FPGA/impl/
+*.fs
+*.bin
+*.binx
+*.vo
+*.vg
+*.db
+*.dmp
+# 临时目录
+_remote/
+__pycache__/
+doc/rendered/
+# LaTeX 中间产物
+*.aux
+*.log
+*.toc
+*.out

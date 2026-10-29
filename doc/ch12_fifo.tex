@@ -1,0 +1,147 @@
+% =====================================================================
+%  ch12_fifo.tex
+% =====================================================================
+\section{FIFO IP：\texttt{fifo\_top}（\file{src/fifo_top/fifo_top.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/fifo_top/fifo_top.v}（注释后 536 行，其中 445 行为加密数据）\\
+模块名 & \texttt{fifo\_top}\\
+来源 & Gowin FIFO IP（配置见 \file{fifo_top.ipc}）\\
+状态 & 已加入工程但\textbf{未例化}，不参与综合（BSRAM 占用 0\%）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{IP 配置（\file{fifo_top.ipc}）}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{FIFO 关键配置}
+\begin{tabular}{lll}
+\toprule
+配置项 & 值 & 含义\\
+\midrule
+\sig{SIZE_W} & 10 & 数据位宽 10bit（与 AD 码值一致）\\
+\sig{DEPTH_W} & 7 & 深度 $2^7=128$ 字\\
+\sig{FWFT} & true & 首字直通（读使能即可出数）\\
+\sig{ALEMPTY}/\sig{ALFULL} & false & 不用几乎空/满标志\\
+\sig{ECC} & false & 不开 ECC\\
+\sig{RESET} & false & 无异步复位端口\\
+\sig{Read_Write_Check_on_RAM} & true & 读写冲突检查\\
+\sig{Synthesis_tool} & GowinSynthesis & 综合器\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+从配置可以反推它的用途：用 10bit 位宽、128 深度的双时钟 FIFO，把 AD 的采样数据从
+\sig{ad_clk1} 时钟域搬到 \sig{sys_clk} 时钟域——这正是顶层被注释掉的
+\sig{fifo_top_inst1} 例化想做的事。
+
+\subsection{文件结构：加密 IP 的三段式}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+行号 & 内容 & 是否可读\\
+\midrule
+1--22 & 版权头 + 本报告添加的注释 & 明文\\
+29 & \texttt{\textasciigrave timescale 100 ps/100 ps} & 明文\\
+30--38 & \texttt{\textasciigrave pragma protect begin\_protected} 等声明 & 明文\\
+39--49 & \texttt{\textasciigrave pragma protect key\_block}（RSA 密钥块） & 密文\\
+50--479 & \texttt{\textasciigrave pragma protect data\_block}（AES-128-CFB） & 密文\\
+480 & \texttt{\textasciigrave pragma protect end\_protected} & 明文\\
+491--535 & \texttt{module fifo\_top (...)} 接口与内部例化 & 明文\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{加密声明段（30--49 行）}
+
+\begin{lstlisting}[style=vsnip]
+`pragma protect begin_protected
+`pragma protect version="2.3"
+`pragma protect author="default"
+`pragma protect encrypt_agent="GOWIN"
+`pragma protect encoding=(enctype="base64", line_length=76, bytes=256)
+`pragma protect key_keyowner="GOWIN",key_keyname="GWK2023-09",key_method="rsa"
+`pragma protect key_block
+vUi58+GDvF3tn/uOD6R30LuygqDdwbKMl5gQq2yHYv2XJy1gjYOXchmWm3vQ4n6nTMfKPi2R95nA
+...
+\end{lstlisting}
+
+这段是 IEEE 1735 风格的 IP 加密封装：\textbf{key\_block} 用 RSA 封装 AES 密钥，
+\textbf{data\_block} 是 AES-128-CFB 加密的 RTL 主体（24\,416 字节，base64 每行 76 字符）。
+只有持有 Gowin 私钥的 EDA 工具能解密，第三方工具（例如安路 TD）只能看到明文接口。
+
+\subsubsection{明文模块声明（491--535 行）}
+
+\begin{lstlisting}[style=vsnip]
+module fifo_top (
+  Data, WrClk, RdClk, WrEn, RdEn, Q, Empty, Full
+);
+input [9:0] Data;
+input WrClk;
+input RdClk;
+input WrEn;
+input RdEn;
+output [9:0] Q;
+output Empty;
+output Full;
+wire VCC; wire GND;
+  \~fifo.fifo_top  fifo_inst (
+    .RdClk(RdClk), .WrClk(WrClk),
+    .WrEn(WrEn), .RdEn(RdEn),
+    .Data(Data[9:0]),
+    .Full(Full), .Empty(Empty), .Q(Q[9:0])
+  );
+  VCC VCC_cZ (.V(VCC));
+  GND GND_cZ (.G(GND));
+  GSR GSR (.GSRI(VCC));
+endmodule
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{fifo\_top 端口}
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{Data} & input & 10 & 写数据\\
+\sig{WrClk} & input & 1 & 写时钟\\
+\sig{RdClk} & input & 1 & 读时钟（可与写时钟异步）\\
+\sig{WrEn} & input & 1 & 写使能\\
+\sig{RdEn} & input & 1 & 读使能\\
+\sig{Q} & output & 10 & 读数据\\
+\sig{Empty} & output & 1 & 空标志\\
+\sig{Full} & output & 1 & 满标志\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+内部还例化了三个全局原语：\sig{VCC}/\sig{GND}（常量）和 \sig{GSR}（全局复位网络，
+\sig{GSRI=VCC} 表示不复位）。这也是 Gowin IP 的常见写法。
+
+\begin{warnbox}
+\textbf{注意}：加密块内的 RTL 无法阅读、也无法添加注释；本报告只对加密块之外的
+明文部分加了注释，\textbf{没有改动任何密文字节}（如改动会导致 IP 解密校验失败）。
+若需要“可读可改”的 FIFO，建议用 IP 生成器重新生成一个非加密版本，
+或直接用 Verilog 手写一个同步/异步 FIFO。
+\end{warnbox}
+
+\subsection{完整注释源码（仅明文部分）}
+
+\lstinputlisting[style=vcode,firstline=1,lastline=56,numbers=left]{../FPGA/src/fifo_top/fifo_top.v}
+
+\noindent 中间 57--479 行为 base64 密文（略）。明文接口部分如下：
+
+\lstinputlisting[style=vcode,firstline=480,lastline=536,numbers=left,firstnumber=480]{../FPGA/src/fifo_top/fifo_top.v}

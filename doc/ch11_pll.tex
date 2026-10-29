@@ -1,0 +1,136 @@
+% =====================================================================
+%  ch11_pll.tex
+% =====================================================================
+\section{PLL IP：\texttt{Gowin\_PLL}（\file{src/gowin_pll/gowin_pll.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/gowin_pll/gowin_pll.v}（注释后 171 行）\\
+模块名 & \texttt{Gowin\_PLL}\\
+来源 & Gowin IP Core Generator 生成（\file{gowin_pll.ipc} 为其配置）\\
+状态 & 已加入工程，但顶层例化被注释 $\Rightarrow$ \textbf{不参与综合}（PLL 占用 0/6）\\
+原设计用途 & 产生 \sig{ad_clk1}/\sig{da_clk1}（6.25MHz），后被 \texttt{divider} 的 1kHz 取代\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：接口}
+
+\begin{lstlisting}[style=vsnip]
+module Gowin_PLL (clkout0, clkout1, clkin);
+output clkout0;
+output clkout1;
+input clkin;
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{clkin} & input & 1 & 参考时钟，配置为 50MHz\\
+\sig{clkout0} & output & 1 & 输出 0，配置为 6.25MHz\\
+\sig{clkout1} & output & 1 & 输出 1，配置为 6.25MHz\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\sig{lock}、\sig{clkout2..6}、\sig{mdrdo} 等是内部连线，未引出端口，综合时被裁剪。
+
+\subsection{第 2 层：结构与硬件参数}
+
+文件由三部分组成：
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{端口与内部线}（31--48 行）：声明未使用的 PLL 输出/状态线；
+  \item \textbf{PLLA 原语例化}（49--77 行）：真正占用 GW5A 芯片 PLL 硬核的单元；
+  \item \textbf{defparam 参数区}（87--169 行）：约 80 条硬件参数。
+\end{enumerate}
+
+\subsubsection{PLLA 原语例化（49--77 行）}
+
+\begin{lstlisting}[style=vsnip]
+PLLA PLLA_inst (
+    .LOCK(lock),
+    .CLKOUT0(clkout0),
+    .CLKOUT1(clkout1),
+    .CLKOUT2(clkout2),
+    ...
+    .CLKIN(clkin),
+    .CLKFB(gw_gnd),
+    .RESET(gw_gnd),
+    .PLLPWD(gw_gnd),
+    ...
+    .MDWDI({gw_gnd,gw_gnd,gw_gnd,gw_gnd,gw_gnd,gw_gnd,gw_gnd,gw_gnd})
+);
+\end{lstlisting}
+
+所有不需要的控制端口（复位、掉电、动态相移、扩频、MDIO 配置等）都接到常量 0
+（\sig{gw_gnd}）。\sig{CLKFB} 接地表示使用内部反馈。
+
+\subsubsection{关键 defparam（87 行起）}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{PLL 主要参数}
+\begin{tabular}{lll}
+\toprule
+参数 & 值 & 含义\\
+\midrule
+\sig{FCLKIN} & \texttt{"50"} & 输入频率 50MHz\\
+\sig{IDIV_SEL} & 1 & 输入分频 = 1\\
+\sig{FBDIV_SEL} & 1 & 反馈分频 = 1\\
+\sig{MDIV_SEL} & 16 & VCO 倍频 = 16\\
+\sig{ODIV0_SEL} / \sig{ODIV1_SEL} & 128 / 128 & 输出分频 = 128\\
+\sig{CLKOUT0_EN}/\sig{CLKOUT1_EN} & TRUE & 只启用两路输出\\
+\sig{CLKOUT2_EN..6} & FALSE & 其余关闭\\
+\sig{CLKFB_SEL} & \texttt{"INTERNAL"} & 内部反馈\\
+\sig{SSC_EN} & FALSE & 关闭扩频时钟\\
+\sig{DYN_PE0..6_SEL} & FALSE & 关闭动态相位调整\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+由此可算出：
+\begin{equation}
+f_{\text{VCO}} = 50\text{MHz}\times\frac{16}{1}=800\text{MHz},\qquad
+f_{\text{out}} = \frac{800\text{MHz}}{128}=6.25\text{MHz}.
+\end{equation}
+
+与 \file{gowin_pll.ipc} 中的 \sig{Clkout0ExpectedFrequency=6.25}、
+\sig{Clkout1ExpectedFrequency=6.25} 完全一致。
+
+\subsection{为什么它没有进入网表}
+
+\file{adda.v} 第 386 行附近的 PLL 例化被注释掉（\verb|/* ... */|）：
+
+\begin{lstlisting}[style=vsnip]
+/*Gowin_PLL pll_inst(
+    .clkout0(ad_clk1), //output clkout0
+    .clkout1(da_clk1), //output clkout1
+    .clkin(sys_clk) //input clkin
+); */
+\end{lstlisting}
+
+原因很清楚：当前工程用 \texttt{divider} 输出 1kHz 作为 AD/DA 转换时钟（慢速演示），
+6.25MHz 的 PLL 输出用不上。综合资源报告里 PLL 为 0/6，也印证了这一点。
+
+\begin{tipbox}
+\textbf{若要把 PLL 用起来}：\\
+(1) 取消 \file{adda.v} 中 \sig{pll_inst} 的注释，并把 \sig{ad_clk1}/\sig{da_clk1} 改由 PLL 驱动；\\
+(2) 删除或旁路 \texttt{divider} 例化（两者不能同时驱动同一输出）；\\
+(3) 在时序约束里为 \sig{clkin} 建立 \sig{create_clock -period 20}，并为 PLL 输出加
+\sig{create_generated_clock}；\\
+(4) 若下游逻辑仍按 \sig{sys_clk} 设计，需要注意跨时钟域（6.25MHz 与 50MHz 不同源）。
+\end{tipbox}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/gowin_pll/gowin_pll.v}

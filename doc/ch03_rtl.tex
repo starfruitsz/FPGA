@@ -1,0 +1,208 @@
+% =====================================================================
+%  ch03_rtl.tex -- 第 3 章 中值滤波与电压换算模块 rtl.v
+% =====================================================================
+\section{中值滤波与电压换算模块 \texttt{rtl}（\file{src/rtl.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/rtl.v}（注释后 143 行）\\
+模块 / 实例 & \texttt{rtl} / \sig{adc_inst}（在 \texttt{adda} 中）\\
+功能 & (1) 用 1024 点平均值标定 ADC 零点；(2) 换算正/负向电压\\
+时钟 & \sig{clk}=50MHz，\sig{rst_n} 低有效\\
+实现代价 & 2 个 30bit 除法器、1 个 14bit 除法、若干乘加\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：模块接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{rtl 端口}
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{clk} & input & 1 & 系统时钟 50MHz\\
+\sig{rst_n} & input & 1 & 异步复位，低有效\\
+\sig{ad_data} & input & 10 & ADC 码值（0$\sim$1023 无符号）\\
+\sig{sign} & output & 1 & 1 表示码值低于零点（负电压）\\
+\sig{volt} & output & 10 & 电压值，单位 0.01V（$100\times$ 标度）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 2 层：内部信号}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llp{8cm}}
+\toprule
+信号 & 位宽 & 作用\\
+\midrule
+\sig{clk_sample} & 1 & 预留，未使用\\
+\sig{median_en} & 1 & 标定完成标志，置 1 后保持\\
+\sig{cnt_median} & 11 & 累加计数 0$\sim$1024\\
+\sig{data_sum_m} & 30 & 1024 点累加和\\
+\sig{data_median} & 14 & 零点（平均值）\\
+\sig{volt_reg} & 31 & 电压中间量\\
+\sig{data_p} & 31 & 正向每 LSB 电压刻度（定点 $2^{13}\times100$ 倍）\\
+\sig{data_n} & 31 & 负向每 LSB 电压刻度\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{语句 1：符号判断（46--51 行）}
+
+\begin{lstlisting}[style=vsnip]
+assign sign=(ad_data<data_median)? 1'b1:1'b0;
+//assign sign=1'b1;
+\end{lstlisting}
+
+当前码值低于标定零点即判为负，输出 \sig{sign} 给 \sig{seg} 决定是否显示负号。
+注释掉的 \sig{assign sign=1'b1} 是调试时强制显示正号的开关。
+
+\subsubsection{块 1：中值使能（53--65 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        median_en<=1'b0;
+    else if(cnt_median==CNT_DATA_MAX)
+        median_en<=1'b1;
+    else
+        median_en<=median_en;
+\end{lstlisting}
+
+\sig{cnt_median} 数到 1024 时把 \sig{median_en} 置 1 并保持。由于块 2 在
+\sig{median_en}=1 后停止计数，\sig{cnt_median} 永远停在 1024，所以
+\sig{median_en} 一旦置位就不会回零——这是一次性的“上电自校准”。
+
+\subsubsection{块 2：累加计数器（67--76 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        cnt_median<=11'b0;
+    else if(!median_en)
+        cnt_median<=cnt_median+1'b1;
+\end{lstlisting}
+
+注意此处\textbf{没有 else 分支}：当 \sig{median_en}=1 时 \sig{cnt_median} 保持不变
+（推断为寄存器，不会产生锁存器，因为复位分支存在）。这个“计数到上限后自锁”
+的写法与块 1 配合完成单次标定。
+
+\subsubsection{块 3：1024 点累加（78--90 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        data_sum_m<=30'b0;
+    else if(cnt_median==CNT_DATA_MAX)
+        data_sum_m<=30'b0;
+    else
+        data_sum_m<=data_sum_m+ad_data;
+\end{lstlisting}
+
+在计数未满 1024 时把 \sig{ad_data} 累加；计满的那一拍清零。最大累加和
+$1023\times1024=1\,047\,552<2^{20}$，用 30bit 有充足余量。
+
+\subsubsection{块 4：求平均（92--103 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        data_median<=12'b0;
+    else if(cnt_median==CNT_DATA_MAX)
+        data_median<=data_sum_m/CNT_DATA_MAX;
+    else
+        data_median<=data_median;
+\end{lstlisting}
+
+累加和除以 1024。综合工具会把“除以 2 的整数次幂”优化成右移 10 位，不消耗除法器。
+由于非阻塞赋值，\sig{data_median} 取到的是清零\textbf{之前}的累加和，结果正确。
+得到的平均值即 ADC 的零点（板级直流偏置），典型值约 512。
+
+\subsubsection{语句 2：正/负向电压刻度（105--115 行）}
+
+\begin{lstlisting}[style=vsnip]
+assign data_p=(median_en==1'b1)?3276800/((1024-data_median)*2):0;
+assign data_n=(median_en==1'b1)?3276800/((data_median+1)*2):0;
+\end{lstlisting}
+
+把满量程 $\pm2.0$V 按“零点两侧各自的码值区间”等分，得到每 LSB 的电压（定点数）。
+$3276800=2^{13}\times400$，于是
+\begin{align}
+\text{data\_p} &= \frac{2^{13}\times400}{2(1024-m)} = \frac{2^{13}\times200}{1024-m},\\
+\text{data\_n} &= \frac{2^{13}\times400}{2(m+1)} = \frac{2^{13}\times200}{m+1},
+\end{align}
+其中 $m=\text{data\_median}$。随后块 5 再右移 13 位，恰好抵消 $2^{13}$，得到
+$100\times V$ 的定点电压。两个除法器都是 30bit 组合除法，需要多级移位减法，
+是本模块 LUT 的主要来源。
+
+\subsubsection{块 5：电压换算（117--136 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        volt_reg<=1'b0;
+    else if(median_en)
+        if((ad_data>(data_median-3)) && (ad_data<(data_median+3)))
+            volt_reg<=1'b0;
+        else if(ad_data<data_median)
+            volt_reg<=(data_n*(data_median-ad_data)) >> 13;
+        else if(ad_data>data_median)
+            volt_reg<=(data_p*(ad_data-data_median)) >> 13;
+    else
+        volt_reg<=1'b0;
+\end{lstlisting}
+
+三条规则：
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{死区}：$|ad\_data-m|\le 2$ 时输出 0，避免零点附近显示末位跳动；
+  \item \textbf{负向}：\sig{data_n}$\times(m-ad\_data)$ 后右移 13；
+  \item \textbf{正向}：\sig{data_p}$\times(ad\_data-m)$ 后右移 13。
+\end{enumerate}
+
+\sig{volt} 的有效范围是 0$\sim$1023（对应 0$\sim$10.23V 显示量程），而实际物理量程是
+$\pm2.0$V，因此数值上 $\text{volt}=100\times|\text{电压}|$，例如 AD 满码时约 199（1.99V）。
+
+\begin{tipbox}
+\textbf{数值验算}：$m=512$，$ad\_data=1023$ 时
+$\text{data\_p}=2^{13}\times200/512=3200$，
+$\text{volt}=(3200\times511)>>13=199$，即 1.99V；\sig{ad_data}=0 时同理得 199。
+与 $\pm2$V 满量程、10bit 分辨率（约 3.9mV/LSB）一致。
+\end{tipbox}
+
+\subsubsection{语句 3：输出（138--141 行）}
+
+\begin{lstlisting}[style=vsnip]
+assign volt=volt_reg;
+\end{lstlisting}
+
+31bit 中间量直接连到 10bit 端口，综合时会隐式截断（取低 10 位）。由于设计保证
+结果不超过 1023，实际不会截断出错。
+
+\subsection{本章小结与提示}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+\item 本模块的核心思想是“\textbf{上电自校准 + 分段线性换算}”，用一个平均值把 ADC 的
+      直流量化偏置消掉，再把码值差换算成电压；
+\item 中值只在复位后 20.5$\mu$s 内计算一次，之后全程锁存；若温度漂移大，可改成
+      “周期性重标定”（例如每 1s 重算一次）；
+\item 两个除法器占用了较多 LUT，若资源紧张，可把 $1/(1024-m)$ 改为
+      “查表 + 线性插值”或直接用移位近似；
+\item 输出 \sig{volt} 在顶层没有负载，属“演示性输出”，实际综合时会被大幅裁剪。
+\end{itemize}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/rtl.v}

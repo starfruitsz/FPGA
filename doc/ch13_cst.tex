@@ -1,0 +1,147 @@
+% =====================================================================
+%  ch13_cst.tex
+% =====================================================================
+\section{物理约束文件 \file{project_2025_11_07.cst}}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/project_2025_11_07.cst}（注释后 109 行）\\
+类型 & Gowin 物理约束（Physical Constraints），文本格式，行尾分号\\
+作用 & 端口 $\rightarrow$ 器件引脚绑定 + I/O 电气属性\\
+统计 & 30 条 \sig{IO_LOC} + 30 条 \sig{IO_PORT}，端口共 44 个\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{语法说明}
+
+Gowin 的物理约束只有两条核心命令：
+
+\begin{lstlisting}[style=cfgcode,numbers=none]
+IO_LOC  "端口名" 引脚号;
+IO_PORT "端口名" 属性=值 ...;
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+关键字 & 含义 & 本例取值\\
+\midrule
+\sig{IO_LOC} & 端口到引脚（或差分对的 P/N）的绑定 & 如 \sig{"sys_clk" T9}\\
+\sig{PULL_MODE} & 内部上下拉 & \sig{NONE}（无上下拉）\\
+\sig{DRIVE} & 输出驱动电流 & \sig{8}（8mA）\\
+\sig{BANK_VCCIO} & 所在 Bank 的 I/O 电压 & \sig{3.3}（3.3V LC\_MOS）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注意 \sig{IO_PORT} 只作用于输出/双向端口的电气属性；输入端口虽然也写了
+\sig{PULL_MODE}/\sig{BANK_VCCIO}，其中的 \sig{DRIVE} 会被工具忽略。
+
+\subsection{引脚分配总表}
+
+\subsubsection{用户约束的 30 个引脚}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{时钟、复位、串口、按键、LED}
+\begin{tabular}{llll}
+\toprule
+端口 & 引脚 & 方向 & 说明\\
+\midrule
+\sig{sys_clk} & T9 & in & 50MHz 时钟（bank 4，专用时钟引脚）\\
+\sig{sys_rst_n} & A15 & in & 复位按键，低有效\\
+\sig{rx} & P18 & in & 串口接收\\
+\sig{tx} & N18 & out & 串口发送\\
+\sig{key_in} & B16 & in & 用户按键\\
+\sig{led0} & D14 & out & 状态指示\\
+\sig{led6} & C14 & out & B 参数接收指示\\
+\sig{led7} & B9 & out & A 参数接收指示\\
+\midrule
+\sig{ad_clk1} & H18 & out & AD 转换时钟 1kHz\\
+\sig{da_clk1} & H13 & out & DA 转换时钟 1kHz\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{DA 数据总线（\sig{ad_out[9:0]}）}
+\begin{tabular}{lcccccccccc}
+\toprule
+位 & 9 & 8 & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0\\
+\midrule
+引脚 & L13 & F18 & K13 & G18 & K14 & D18 & K16 & G14 & H14 & C18\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{AD 数据总线（\sig{ad_date[9:0]}）}
+\begin{tabular}{lcccccccccc}
+\toprule
+位 & 9 & 8 & 7 & 6 & 5 & 4 & 3 & 2 & 1 & 0\\
+\midrule
+引脚 & C17 & K15 & F14 & J13 & D17 & K12 & G16 & L12 & F17 & H17\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{未约束、由工具自动分配的 12 个引脚}
+
+\sig{sel[3:0]} 与 \sig{seg[7:0]}（数码管位选/段选）在 \file{.cst} 中\textbf{没有}约束。
+PnR 报告（\file{pin.html}）显示它们被自动布到了：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lclc}
+\toprule
+端口 & 引脚 & 端口 & 引脚\\
+\midrule
+\sig{seg[0]} & U18 & \sig{sel[0]} & N16\\
+\sig{seg[1]} & L14 & \sig{sel[1]} & U17\\
+\sig{seg[2]} & P16 & \sig{sel[2]} & N14\\
+\sig{seg[3]} & V16 & \sig{sel[3]} & T17\\
+\sig{seg[4]} & P12 & & \\
+\sig{seg[5]} & N15 & & \\
+\sig{seg[6]} & V13 & & \\
+\sig{seg[7]} & R11 & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{warnbox}
+\textbf{风险}：数码管引脚未写进约束文件，意味着每次重跑 PnR（尤其是更换版本、改动
+\sig{unused_pin} 策略后）都可能得到不同的引脚，最终码流上板后数码管可能不亮或乱码。
+由于工程已经生成过一版码流（当前引脚是那次 PnR 的结果），若要复现该板子的显示效果，
+应把上表 12 个引脚补写进 \file{.cst}：
+\begin{lstlisting}[style=cfgcode,numbers=none]
+IO_LOC "seg[0]" U18;
+IO_PORT "seg[0]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+...
+IO_LOC "sel[3]" T17;
+IO_PORT "sel[3]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+\end{lstlisting}
+\end{warnbox}
+
+\subsection{端口数与实际 Buffer 数的差异}
+
+PnR 报告给出“I/O Port 44、I/O Buf 42（14 输入 + 28 输出）”。差的 2 个是
+\sig{ad_clk} 与 \sig{da_clk}：它们在 \file{adda.v} 中声明为输入端口，但整个设计
+\textbf{从未使用}，综合时被裁剪成悬空网络，因此没有生成输入 Buffer。这也解释了为什么
+\file{.cst} 中没有这两个端口的约束。
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=cfgcode]{../FPGA/src/project_2025_11_07.cst}

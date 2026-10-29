@@ -1,0 +1,108 @@
+% =====================================================================
+%  style.tex -- 公共宏包、版式与代码排版设置
+% =====================================================================
+\usepackage[a4paper,left=2.0cm,right=2.0cm,top=2.4cm,bottom=2.2cm,headsep=0.6cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath,amssymb}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds}
+\usepackage[colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black,citecolor=blue!55!black,
+            bookmarksnumbered=true]{hyperref}
+
+% ---------- 颜色 ----------
+\definecolor{codebg}{gray}{0.985}
+\definecolor{codeframe}{gray}{0.62}
+\definecolor{kw}{RGB}{0,80,160}
+\definecolor{cmt}{RGB}{0,110,90}
+\definecolor{str}{RGB}{150,60,0}
+\definecolor{warnbg}{RGB}{255,244,224}
+\definecolor{warnframe}{RGB}{200,120,0}
+\definecolor{tipbg}{RGB}{232,244,255}
+\definecolor{tipframe}{RGB}{30,90,170}
+
+% ---------- 代码块样式 ----------
+\lstdefinestyle{vcode}{
+  language=Verilog,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cmt},
+  stringstyle=\color{str},
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=6pt,
+  backgroundcolor=\color{codebg}, frame=single, rulecolor=\color{codeframe},
+  framexleftmargin=1.2em, xleftmargin=1.6em,
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  tabsize=4, breaklines=true, breakatwhitespace=false,
+  extendedchars=true, inputencoding=utf8,
+  aboveskip=1.0em, belowskip=0.6em,
+  upquote=true
+}
+\lstdefinestyle{vsnip}{
+  language=Verilog,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cmt},
+  stringstyle=\color{str},
+  numbers=none,
+  backgroundcolor=\color{codebg}, frame=single, rulecolor=\color{codeframe},
+  framexleftmargin=0.6em, xleftmargin=1.0em,
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  tabsize=4, breaklines=true, breakatwhitespace=false,
+  extendedchars=true, inputencoding=utf8,
+  aboveskip=0.8em, belowskip=0.5em
+}
+\lstdefinestyle{cfgcode}{
+  basicstyle=\ttfamily\scriptsize,
+  numbers=left, numberstyle=\tiny\color{gray},
+  backgroundcolor=\color{codebg}, frame=single, rulecolor=\color{codeframe},
+  framexleftmargin=1.2em, xleftmargin=1.6em,
+  columns=fullflexible, keepspaces=true, showstringspaces=false,
+  breaklines=true, extendedchars=true, inputencoding=utf8
+}
+
+% ---------- 标识符排版 ----------
+\DeclareRobustCommand{\sig}[1]{\texttt{\detokenize{#1}}}
+\DeclareRobustCommand{\file}[1]{\texttt{\detokenize{#1}}}
+\DeclareRobustCommand{\reg}[1]{\sig{#1}}
+
+% ---------- 提示框(环境形式, 内部可用段落/公式/列表) ----------
+\newsavebox{\noteboxsave}
+\newenvironment{warnbox}
+  {\par\medskip\noindent\begin{lrbox}{\noteboxsave}%
+   \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule}\small}
+  {\end{minipage}\end{lrbox}%
+   \fcolorbox{warnframe}{warnbg}{\usebox{\noteboxsave}}\par\smallskip}
+\newenvironment{tipbox}
+  {\par\medskip\noindent\begin{lrbox}{\noteboxsave}%
+   \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule}\small}
+  {\end{minipage}\end{lrbox}%
+   \fcolorbox{tipframe}{tipbg}{\usebox{\noteboxsave}}\par\smallskip}
+
+% ---------- 表格辅助 ----------
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcommand{\tabfont}{\small}
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parskip}{0.25em}
+\renewcommand{\arraystretch}{1.15}
+
+% ---------- 页眉页脚 ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small 高云 GW5A-25A 的 \texttt{project\_2025\_11\_07} 工程代码逐层解析}
+\fancyhead[R]{\small \thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+% ---------- 目录深度 ----------
+\setcounter{tocdepth}{3}
+\setcounter{secnumdepth}{3}
+
+% ---------- 常用宏 ----------
+\newcommand{\cntmax}[1]{\sig{#1}}
+\newcommand{\unit}[1]{\,\mathrm{#1}}

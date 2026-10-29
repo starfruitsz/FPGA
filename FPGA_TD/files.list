@@ -1,0 +1,17 @@
+FileSet "DESIGN_DEFAULT"
+{
+    Verilog
+    {
+        C:/Users/Administrator/Desktop/task/FPGA/src/adda.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/bcd.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/divider.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/eso.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/key.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/rtl.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/seg.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/uart_rx.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/uart_tx.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/gowin_pll/gowin_pll.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/fifo_top/fifo_top.v
+    }
+}

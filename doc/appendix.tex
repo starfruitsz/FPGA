@@ -1,0 +1,109 @@
+% =====================================================================
+%  appendix.tex
+% =====================================================================
+\appendix
+\section{附录}
+
+\subsection{附录 A：文件清单与统计}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llrr}
+\toprule
+文件 & 模块 & 原始行数 & 注释后行数\\
+\midrule
+\file{src/adda.v} & \texttt{adda} & 261 & 417\\
+\file{src/rtl.v} & \texttt{rtl} & 80 & 143\\
+\file{src/eso.v} & \texttt{eso} & 140 & 252\\
+\file{src/divider.v} & \texttt{divider} & 50 & 82\\
+\file{src/key.v} & \texttt{key} & 32 & 61\\
+\file{src/seg.v} & \texttt{seg} & 153 & 231\\
+\file{src/bcd.v} & \texttt{bcd} & 62 & 98\\
+\file{src/uart_rx.v} & \texttt{uart\_rx} & 116 & 187\\
+\file{src/uart_tx.v} & \texttt{uart\_tx} & 84 & 136\\
+\file{src/gowin_pll/gowin_pll.v} & \texttt{Gowin\_PLL} & 137 & 171\\
+\file{src/fifo_top/fifo_top.v} & \texttt{fifo\_top} & 504 & 536\\
+\file{src/project_2025_11_07.cst} & 约束 & 69 & 109\\
+\file{src/gowin_pll/gowin_pll_tmp.v} & 模板 & 19 & 30\\
+\file{src/fifo_top/fifo_top_tmp.v} & 模板 & 24 & 34\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+全部注释只增加以 \sig{//} 开头的整行注释，未改动任何代码行。经脚本比对，
+注释前后去掉注释后的 Verilog 词法内容\textbf{完全一致}（17 个文件全部通过）。
+
+\subsection{附录 B：模块与关键信号速查}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+模块 & 输入 & 输出\\
+\midrule
+\texttt{adda} & \sig{ad_date, key_in, rx, sys_clk, sys_rst_n} & \sig{ad_out, sel, seg, tx, led*, \*_clk1}\\
+\texttt{rtl} & \sig{ad_data} & \sig{sign, volt}\\
+\texttt{eso} & \sig{e_in, u_out, c/k} & \sig{out_da, z1k0..z3k0}\\
+\texttt{divider} & \sig{sys_clk} & \sig{clk0, clk1}\\
+\texttt{key} & \sig{key_in} & \sig{key_out}\\
+\texttt{seg} & \sig{data, point, sign} & \sig{sel, seg}\\
+\texttt{bcd} & \sig{data[9:0]} & \sig{unit, ten, hun}\\
+\texttt{uart\_rx} & \sig{rx} & \sig{po_data, po_flag}\\
+\texttt{uart\_tx} & \sig{pi_data, pi_flag} & \sig{tx}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{附录 C：复现步骤}
+
+\subsubsection{C.1 用安路 TD 打开（代码浏览用容器工程）}
+
+高云 \sig{.gprj} 无法被 TD 直接打开，本报告用 TD 的 Tcl 接口创建了一个同名容器工程：
+
+\begin{lstlisting}[style=cfgcode,numbers=none]
+$env:PATH  # 需能找到 D:\FPGA\bin\td_commands_prompt.exe
+cd C:/Users/Administrator/Desktop/task/FPGA_TD
+# 通过 stdin 喂给 TD 的 Tcl 解释器：
+create_project -family ph1 -device PH1A60GEG324 project_2025_11_07_TD .
+import_device ph1_60.db -package PH1A60GEG324
+add_files -list ./files.list
+exit
+\end{lstlisting}
+
+随后直接双击 \file{project_2025_11_07_TD.al} 或
+\sig{td.exe project_2025_11_07_TD.al} 即可打开，工程只引用 \file{../FPGA/src} 下的源文件，
+不复制。注意该工程只能浏览/编辑代码，\textbf{不能}用安路器件综合本设计。
+
+\subsubsection{C.2 编译本报告}
+
+\begin{lstlisting}[style=cfgcode,numbers=none]
+cd C:/Users/Administrator/Desktop/task/doc
+xelatex main.tex
+xelatex main.tex      # 第二遍生成目录与交叉引用
+\end{lstlisting}
+
+需要 MiKTeX（含 ctex 宏包与中文字体）。文档引用 \file{../FPGA/src/*.v} 源文件，
+移动目录结构后需同步修改相对路径。
+
+\subsection{附录 D：术语表}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+术语 & 含义\\
+\midrule
+ADRC & 自抗扰控制（Active Disturbance Rejection Control）\\
+ESO & 扩张状态观测器（Extended State Observer），估计状态与总扰动\\
+TD & 安路科技开发工具 TangDynasty\\
+GW5A & 高云 Arora V 系列 FPGA（22nm 工艺）\\
+8N1 & UART 8 数据位、无校验、1 停止位\\
+FWFT & First-Word Fall-Through，FIFO 首字直通模式\\
+BCD & 二进制编码十进制\\
+LSB/MSB & 最低有效位 / 最高有效位\\
+\bottomrule
+\end{tabular}
+\end{table}

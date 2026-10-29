@@ -1,0 +1,113 @@
+% =====================================================================
+%  ch05_divider.tex
+% =====================================================================
+\section{时钟分频模块 \texttt{divider}（\file{src/divider.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/divider.v}（注释后 82 行）\\
+模块 / 实例 & \texttt{divider} / \sig{divider_inst}\\
+功能 & 把 50MHz 系统时钟分频成 1kHz，输出两路同相方波作 AD/DA 转换时钟\\
+参数 & \sig{cnt_max}=24999（顶层覆盖）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{sys_clk} & input & 1 & 50MHz 输入时钟\\
+\sig{sys_rst_n} & input & 1 & 异步复位，低有效\\
+\sig{clk0} & output & 1 & 分频输出 0（接 \sig{ad_clk1}）\\
+\sig{clk1} & output & 1 & 分频输出 1（接 \sig{da_clk1}）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 2 层：内部结构}
+
+只有一个 15bit 计数器 \sig{cnt} 和两个输出寄存器 \sig{clk0}、\sig{clk1}。
+整个模块是“计数—翻转”的最简偶数分频结构：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+块 & 行号 & 功能\\
+\midrule
+块 1 & 32 & 计数器 0$\sim$cnt\_max 循环\\
+块 2 & 54 & \sig{clk0} 每计满翻转一次\\
+块 3 & 66 & \sig{clk1} 与 \sig{clk0} 同步翻转\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{块 1：分频计数器（32--52 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        cnt<=15'd0;
+    else if(cnt==cnt_max)
+        cnt<=15'd0;
+    else
+        cnt<=cnt+15'd1;
+\end{lstlisting}
+
+计数 0 到 24999 共 25000 个时钟，是一个周期为 25000 拍的“节拍发生器”。
+
+\subsubsection{块 2/3：输出翻转（54--80 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        clk0<=1'b0;
+    else if(cnt==cnt_max)
+        clk0<=~clk0;
+    else
+        clk0<=clk0;
+\end{lstlisting}
+
+\sig{clk0} 与 \sig{clk1} 的代码完全相同，都在计满时翻转，因此输出同频同相。
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{分频关系}
+\begin{tabular}{lll}
+\toprule
+量 & 公式 & 数值\\
+\midrule
+计数器周期 & \sig{cnt_max}+1 & 25000 拍\\
+输出方波周期 & $2\times25000$ 拍 & 50000 拍\\
+输出频率 & $50\text{MHz}/50000$ & 1 kHz\\
+占空比 & 1:1 & 50\%\\
+输出抖动 & 一个 \sig{sys_clk} 周期 & 20 ns\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{warnbox}
+\textbf{两点提示}：\\
+(1) 文件头注释与参数注释写“500 分频”，但实参是 24999，真实分频比是 50000，
+以代码为准；\\
+(2) 用普通寄存器直接产生时钟并驱动 I/O 引脚，在 1kHz 下没有问题，但如果把频率提高到
+数十 MHz，建议改用 PLL（工程里的 \sig{Gowin_PLL} 就是为此准备的）或
+“时钟使能”写法，并补充 \sig{create_generated_clock} 约束。
+\end{warnbox}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/divider.v}

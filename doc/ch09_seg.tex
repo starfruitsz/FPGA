@@ -1,0 +1,291 @@
+% =====================================================================
+%  ch09_seg.tex
+% =====================================================================
+\section{数码管扫描显示模块 \texttt{seg}（\file{src/seg.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/seg.v}（注释后 231 行）\\
+模块 / 实例 & \texttt{seg} / \sig{seg_inst}\\
+功能 & 把 10bit 二进制数转成 BCD 后，按“符号+百位+十位+个位”动态扫描显示\\
+参数 & \sig{CNT_MAX}=23999（位扫描间隔）\\
+子模块 & \texttt{bcd}（\sig{bcd_8421}）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{clk} & input & 1 & 50MHz\\
+\sig{rst_n} & input & 1 & 异步复位\\
+\sig{point} & input & 4 & 小数点位置掩码，1=该位亮小数点\\
+\sig{data} & input & 10 & 待显示数值（0$\sim$1023）\\
+\sig{seg_en} & input & 1 & 显示使能（本工程恒为 1）\\
+\sig{sign} & input & 1 & 1=负数，在最高位显示负号\\
+\sig{sel} & output & 4 & 位选（低有效）\\
+\sig{seg} & output & 8 & 段选（bit7=小数点，其余 a$\sim$g）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 2 层：内部结构}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+信号 & 位宽 & 功能\\
+\midrule
+\sig{unit}/\sig{ten}/\sig{hun} & 4 & BCD 个/十/百位\\
+\sig{data_reg} & 16 & 4 个待显示 nibble（0$\sim$9 数字，10=负号，11=空白）\\
+\sig{cnt_1ms} & 16 & 位扫描间隔计数\\
+\sig{flag_1ms} & 1 & 位切换脉冲\\
+\sig{cnt_sel} & 3 & 当前扫描位 0$\sim$5\\
+\sig{sel_reg} & 6 & 一热码位选移位寄存器\\
+\sig{data_disp} & 4 & 当前位要显示的数字\\
+\sig{dot_disp} & 1 & 当前位的小数点\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{例化：\texttt{bcd}（37--50 行）}
+
+\begin{lstlisting}[style=vsnip]
+bcd bcd_8421(
+    .clk(clk),
+    .rst_n(rst_n),
+    .data(data),
+    .unit(unit),
+    .ten(ten),
+    .hun(hun)
+);
+\end{lstlisting}
+
+把 10bit 二进制转成 3 位 BCD（见第 10 章）。由于只能表示 0$\sim$999，
+1000$\sim$1023 会丢失千位（显示成 0$\sim$23）。
+
+\subsubsection{块 1：显示内容组装（71--98 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        data_reg<=1'b0;
+    else if(((hun) || (point[2])) && (sign == 1'b1))
+        data_reg <= {4'd10,hun,ten,unit};
+    else if(((hun) || (point[2])) && (sign == 1'b0))
+        data_reg <= {4'd11,hun,ten,unit};
+    else if(((ten) || (point[1])) && (sign == 1'b1))
+        data_reg <= {4'd11,4'd10,ten,unit};
+    ...
+    else
+        data_reg <= {4'd11,4'd11,4'd11,unit};
+\end{lstlisting}
+
+这一组 \sig{if} 实现“前导零消隐 + 负号插入”，共四种宽度 × 两种符号：
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{显示模式}
+\begin{tabular}{clll}
+\toprule
+条件 & \sig{data_reg} & 显示（自左向右） & 例\\
+\midrule
+百位非 0 或需小数点，负数 & \{10,hun,ten,unit\} & 负号+3 位 & \texttt{-1.23}\\
+百位非 0 或需小数点，正数 & \{11,hun,ten,unit\} & 空+3 位 & \texttt{ 1.23}\\
+十位非 0 或需小数点，负数 & \{11,10,ten,unit\} & 空+负号+2 位 & \texttt{ -4.5}\\
+十位非 0 或需小数点，正数 & \{11,11,ten,unit\} & 空+空+2 位 & \texttt{  4.5}\\
+仅个位，负数 & \{11,11,10,unit\} & 空+空+负号+1 位 & \texttt{  -7}\\
+其他 & \{11,11,11,unit\} & 仅最右一位 & \texttt{   7}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注意本工程 \sig{point=4'b0100}，\sig{point[2]}=1 恒成立，因此永远走“3 位显示”分支：
+显示为 \verb|符号 . 百 十 个|，小数点固定在百位（第 3 位），形如 \texttt{1.23}。
+
+\subsubsection{块 2/3：位扫描节拍（100--122 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        cnt_1ms<=1'b0;
+    else if(cnt_1ms==CNT_MAX)
+        cnt_1ms<=1'b0;
+    else
+        cnt_1ms<=cnt_1ms+1'b1;
+
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        flag_1ms<=1'b0;
+    else if(cnt_1ms==CNT_MAX-1'b1)
+        flag_1ms<=1'b1;
+    else
+        flag_1ms<=1'b0;
+\end{lstlisting}
+
+\sig{cnt_1ms} 计 0$\sim$23999（24000 拍），在计满前一拍产生 \sig{flag_1ms}。
+$24000/50\text{MHz}=0.48$ms（注释写“1ms”是按 25MHz 时钟估的）。
+
+\subsubsection{块 4/5：扫描位序号与一热码（124--152 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        cnt_sel<=1'b0;
+    else if(cnt_sel==3'b101 && flag_1ms)
+        cnt_sel<=1'b0;
+    else if(flag_1ms)
+        cnt_sel<=cnt_sel+1'b1;
+    else
+        cnt_sel<=cnt_sel;
+
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        sel_reg<=4'b000_000;
+    else if(!cnt_sel && flag_1ms)
+        sel_reg<=4'b0001;
+    else if(flag_1ms)
+        sel_reg<=sel_reg<<1;
+    else
+        sel_reg<=sel_reg;
+\end{lstlisting}
+
+\sig{cnt_sel} 每 0.48ms 前进一步，0$\rightarrow$5 循环；\sig{sel_reg} 是 6bit 一热码，
+每拍左移一位。表 \ref{tab:sel} 给出完整循环。
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{位选循环（\sig{sel} = \sig{~sel_reg[3:0]}）}
+\label{tab:sel}
+\begin{tabular}{cccl}
+\toprule
+\sig{cnt_sel} & \sig{sel_reg} & \sig{sel} & 效果\\
+\midrule
+0 & 000001 & 1110 & 最右位（个位）亮\\
+1 & 000010 & 1101 & 十位亮\\
+2 & 000100 & 1011 & 百位亮（小数点）\\
+3 & 001000 & 0111 & 符号位亮\\
+4 & 010000 & 1111 & 全灭（空时隙）\\
+5 & 100000 & 1111 & 全灭（空时隙）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+一轮 6 个时隙共 $6\times0.48=2.88$ms，刷新率约 347Hz，人眼无闪烁。
+
+\subsubsection{块 6/7：当前位数字与小数点（154--188 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        data_disp<=1'b0;
+    else if(seg_en && flag_1ms)
+        case(cnt_sel)
+            3'd0:data_disp<=data_reg[3:0];
+            3'd1:data_disp<=data_reg[7:4];
+            3'd2:data_disp<=data_reg[11:8];
+            3'd3:data_disp<=data_reg[15:12];
+            default:data_disp<=1'b0;
+        endcase
+    else
+        data_disp<=data_disp;
+
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        dot_disp<=1'b1;
+    else if(flag_1ms)
+        dot_disp<=point[cnt_sel];
+    else
+        dot_disp<=dot_disp;
+\end{lstlisting}
+
+\sig{cnt_sel}=0$\sim$3 依次取 \sig{data_reg} 的四个 nibble，4/5 取默认 0（对应空时隙）。
+小数点取 \sig{point[cnt_sel]}；注意 \sig{point} 只有 4 位而 \sig{cnt_sel} 可达 5，
+越界索引在综合时被当作 0（仿真时可能读到 X）。
+
+\subsubsection{块 8：段码译码（190--215 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        seg<=8'b0000_0000;
+    else
+        case(data_disp)
+            4'd0:seg<={dot_disp,7'b0111111};
+            4'd1:seg<={dot_disp,7'b0000110};
+            ...
+            4'd10:seg<=8'b0100_0000;
+            4'd11:seg<=8'b0000_0000;
+            default:seg<=8'b0011_1111;
+        endcase
+\end{lstlisting}
+
+段码按“bit0=a, bit1=b, …, bit6=g, bit7=dp”排列，\texttt{1} 表示点亮（共阴数码管）：
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{段码表}
+\begin{tabular}{cccl}
+\toprule
+数字 & 段码（不含 dp） & 十六进制 & 点亮的段\\
+\midrule
+0 & 0111111 & 0x3F & a b c d e f\\
+1 & 0000110 & 0x06 & b c\\
+2 & 1011011 & 0x5B & a b d e g\\
+3 & 1001111 & 0x4F & a b c d g\\
+4 & 1100110 & 0x66 & b c f g\\
+5 & 1101101 & 0x6D & a c d f g\\
+6 & 1111101 & 0x7D & a c d e f g\\
+7 & 0000111 & 0x07 & a b c\\
+8 & 1111111 & 0x7F & 全亮\\
+9 & 1101111 & 0x6F & a b c d f g\\
+10（负号） & 1000000 & 0x40 & 只亮 g（中间一横）\\
+11（空白） & 0000000 & 0x00 & 全灭\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{块 9：位选输出（217--229 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        sel<=4'b0_000;
+    else
+        sel<=~sel_reg;
+\end{lstlisting}
+
+\sig{sel} 为 4bit，而 \sig{sel_reg} 为 6bit，赋值时取低 4 位取反。因此
+\sig{cnt_sel}=4/5 时 \sig{sel}=4'b1111（全灭），恰好把两个空时隙实现为“消隐”，
+功能上正确，但属于隐式依赖位宽截断——建议显式写成 \sig{sel <= ~sel_reg[3:0]} 并注释意图。
+
+\subsection{本章小结}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+\item 显示逻辑采用“软件译码 + 动态扫描”，6 个时隙中只有 4 个真正驱动数码管，
+      另 2 个时隙用于降低亮度/消隐；
+\item 前导零消隐与负号插入由块 1 的优先级 \sig{if} 链实现，逻辑清晰但分支较多，
+      综合后是一组 4 选 1 的 mux；
+\item 10bit 数据（0$\sim$1023）超过 3 位 BCD 的表示范围，满码附近显示会回绕。
+\end{itemize}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/seg.v}

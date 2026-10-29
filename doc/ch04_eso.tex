@@ -1,0 +1,260 @@
+% =====================================================================
+%  ch04_eso.tex -- 第 4 章 扩展状态观测器 eso.v
+% =====================================================================
+\section{扩展状态观测器 \texttt{eso}（\file{src/eso.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/eso.v}（注释后 252 行）\\
+模块 / 实例 & \texttt{eso} / \sig{eso_inst}\\
+功能 & ADRC 的 ESO（扩张状态观测器）+ 状态误差反馈 + 扰动补偿\\
+时钟 & \sig{ad_clk}=\sig{ad_clk1}=1kHz（由 divider 分频得到）\\
+实现代价 & 9 个乘法器 $\rightarrow$ 7 个 MULTALU27X18（占全设计 25\%）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：模块接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{eso 端口}
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{ad_clk} & input & 1 & 观测器运算时钟（1kHz）\\
+\sig{sys_rst_n} & input & 1 & 异步复位，低有效\\
+\sig{e_in} & input & 10 signed & 误差输入（\sig{date_y} $=\text{ADC}-512$）\\
+\sig{u_out} & input & 10 signed & 上一拍控制量反馈\\
+\sig{c_flag}、\sig{k_flag} & input & 1 & 参数更新标志\\
+\sig{c_date}、\sig{k_date} & input & 12 & 参数值\\
+\sig{z1k0}、\sig{z2k0}、\sig{z3k0} & output & 20 signed & 观测状态（顶层未连接）\\
+\sig{out_da} & output & 10 & 控制量输出（接 \sig{date_u}$\rightarrow$DAC）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{算法：离散扩张状态观测器}
+
+设被控对象的离散模型为一阶/二阶带扰动的形式，ESO 用三阶线性观测器同时估计
+“输出 $z_1$、一阶导 $z_2$、总扰动 $z_3$”：
+\begin{align}
+e(k) &= z_1(k) - y(k),\\
+z_1(k+1) &= z_1(k) + h\,z_2(k) - \beta_{01}h\,e(k),\\
+z_2(k+1) &= z_2(k) + h\,z_3(k) - \beta_{02}h\,e(k) + b_0 h\,u(k),\\
+z_3(k+1) &= z_3(k) - \beta_{03}h\,e(k),
+\end{align}
+其中 $h=1/1024$，$\beta_{01}=90$、$\beta_{02}=2700$、$\beta_{03}=27000$，$b_0=5000/8192$。
+状态误差反馈（线性 ADRC 的 PD 部分）与扰动补偿为
+\begin{equation}
+u(k) = k\left(c\,z_1(k) + z_2(k)\right) + \operatorname{sgn}\!\left(c z_1+z_2\right) + c\,z_2(k) - z_3(k),
+\end{equation}
+最后右移 15 位压缩动态范围、取低 10 位送 DAC。
+
+\subsection{第 2 层：内部信号}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llp{8.4cm}}
+\toprule
+信号 & 位宽 & 作用\\
+\midrule
+\sig{z1k1/z2k1/z3k1} & 20 signed & 上一拍观测状态\\
+\sig{y} & 10 signed & 测量值（$=-\text{e\_in}$）\\
+\sig{uk} & 10 signed & 上一拍控制量\\
+\sig{c} / \sig{k} & 10/11 signed & 反馈参数，默认 150 / 20\\
+\sig{uk_b0}、\sig{uk_b0_h} & 36 signed & $u\beta_0$ 及其 $>>13$\\
+\sig{z2k1_h}、\sig{z3k1_h} & 20 signed & $h z_2$、$h z_3$（$>>10$）\\
+\sig{sub} & 21 signed & 观测误差 $z_1-y$\\
+\sig{sub_B01..03} & 42 signed & 误差乘三个增益\\
+\sig{sub_B01_h..} & 42 signed & 再 $>>10$ 得到 $\beta_{0i}h e$\\
+\sig{z1k0_reg..} & 44 signed & 三阶状态递推的组合结果\\
+\sig{err1/err2} & 32 signed & $c z_1$、$c z_2$\\
+\sig{she} & 33 signed & $c z_1 + z_2$\\
+\sig{kshe} & 43 signed & $k\,s$\\
+\sig{sgn} & 5 signed & 符号项（见风险说明）\\
+\sig{v_1} & 42 signed & $k s + \operatorname{sgn} + c z_2$\\
+\sig{viout} & 40 signed & $v_1 - z_3$\\
+\sig{b} & 40 signed & $\text{viout}>>15$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{块 1：状态打拍（86--111 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge ad_clk or negedge sys_rst_n)
+    begin
+        if(sys_rst_n==1'b0)
+            begin
+                z1k1 <= 'd0;
+                z2k1 <= 'd0;
+                z3k1 <= 'd0;
+                y <= 'd0;
+                uk <= 'd0;
+            end
+        else
+            begin
+                z1k1 <= z1k0; //z(k)=z(k+1)
+                z2k1 <= z2k0;
+                z3k1 <= z3k0;
+                y <= -e_in;
+                uk <= u_out;
+            end
+    end
+\end{lstlisting}
+
+这是 ESO 的“状态寄存器”层：把组合逻辑算出的 $k+1$ 拍状态锁存为 $k$ 拍状态，
+并同时锁存测量值（取负：$y=-e_{in}$）和上一拍控制量。复位后全部为 0，
+保证观测器从零状态开始收敛。
+
+\subsubsection{块 2：参数锁存（113--136 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge ad_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        begin
+            c<=10'd150;
+            k<=11'd20;
+        end //初始化参数
+    else if(c_flag==1'b1)
+        c<=c_date;
+    else if(k_flag==1'b1)
+        k<=k_date;
+    else
+        begin
+            c<=c;
+            k<=k;
+        end
+\end{lstlisting}
+
+复位时参数取经验值 $c=150$、$k=20$；工作期间由串口下发的 \sig{c_flag}/\sig{k_flag}
+更新。这里的 \sig{if/else-if} 是\textbf{互斥优先级}结构，配合顶层“标志置 1 后不清零”
+的问题，会导致 \sig{k} 永远无法在 \sig{c} 之后更新（详见第 2 章块 7/8 与第 14 章 P1）。
+
+\subsubsection{语句组 1：$u\beta_0$ 项（138--146 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire signed [WIDTH + 16 - 1 : 0] uk_b0;
+wire signed [WIDTH + 16 - 1 : 0] uk_b0_h;
+assign uk_b0 = uk * b0;
+assign uk_b0_h = uk_b0 >>> 13;
+\end{lstlisting}
+
+$u\beta_0$ 用 36bit 保存乘积，再右移 13 位。由于 $\beta_0=5000$、$2^{13}=8192$，
+有效系数为 $5000/8192\approx0.6104$。
+
+\subsubsection{语句组 2：$h z_2$、$h z_3$（148--154 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire signed [WIDTH - 1: 0] z2k1_h;
+wire signed [WIDTH - 1: 0] z3k1_h;
+assign z2k1_h = z2k1 >>> 10;
+assign z3k1_h = z3k1 >>> 10;
+\end{lstlisting}
+
+右移 10 位即乘以采样步长 $h=1/1024$。这两项是观测器的“积分通道”。
+
+\subsubsection{语句组 3/3'/4：观测误差与三个增益（156--180 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire signed [WIDTH - 1 + 1: 0] sub;
+assign sub = z1k1 - y;
+
+wire signed [WIDTH - 1 + 1 + 21: 0] sub_B01;
+wire signed [WIDTH - 1 + 1 + 21: 0] sub_B02;
+wire signed [WIDTH - 1 + 1 + 21: 0] sub_B03;
+assign sub_B01 = sub * B01;
+assign sub_B02 = sub * B02;
+assign sub_B03 = sub * B03;
+
+wire signed [WIDTH - 1 + 1 + 21: 0] sub_B01_h;
+assign sub_B01_h = sub_B01 >>> 10;
+\end{lstlisting}
+
+$e=z_1-y$（21bit），分别乘 90、2700、27000（42bit），再右移 10 位得到
+$\beta_{01}he$、$\beta_{02}he$、$\beta_{03}he$。三个乘法器共用一个被乘数 \sig{sub}，
+综合工具可共享部分积。
+
+\subsubsection{语句组 5/6：状态递推（182--200 行）}
+
+\begin{lstlisting}[style=vsnip]
+assign z1k0_reg = z1k1 + z2k1_h - sub_B01_h; //前向差分 ESO
+assign z2k0_reg = z2k1 + z3k1_h - sub_B02_h + uk_b0_h;
+assign z3k0_reg = z3k1 - sub_B03_h;
+
+assign z1k0 = z1k0_reg[21: 0];
+assign z2k0 = z2k0_reg[21: 0];
+assign z3k0 = z3k0_reg[21: 0];
+\end{lstlisting}
+
+这三行就是第 4.3 节的三个差分方程，一一对应。结果在 44bit 中间量上计算后，
+取低 22 位输出并回灌到块 1。取低位属于“环绕截断”，正常收敛时高位是符号扩展、
+不损失信息；但若观测器发散，会静默回绕而不是饱和。
+
+\subsubsection{语句组 7--11：状态误差反馈与扰动补偿（202--239 行）}
+
+\begin{lstlisting}[style=vsnip]
+assign err1 = z1k0 * c;
+assign err2 = z2k0 * c;
+
+assign she = err1 + z2k0;              // s = c*e1 + e2
+assign kshe = she * k;
+
+assign sgn= (she>1'd0)?1'd1:4'b1111;
+
+assign v_1 = kshe +sgn + err2;
+assign viout = v_1 - z3k0;             // ks+sgn+cz2-f
+\end{lstlisting}
+
+组合过程为
+\begin{equation}
+s = c\,z_1 + z_2 \;\rightarrow\; ks \;\rightarrow\; v_1 = ks + \operatorname{sgn}(s) + c\,z_2
+\;\rightarrow\; u = v_1 - z_3 .
+\end{equation}
+
+\subsubsection{语句组 12：输出标度（241--246 行）}
+
+\begin{lstlisting}[style=vsnip]
+wire signed [40 -1: 0] b;
+assign b = viout >>> 15;
+assign out_da = b[9 : 0];
+\end{lstlisting}
+
+右移 15 位（$/32768$）把大位宽控制量压到 10bit 量程，再取低 10 位送 DAC。
+这一步等价于给控制量加了一个固定的标度因子，实际增益需结合 DAC 的量化基准理解：
+上位机通过调 \sig{k}、\sig{c} 改变闭环增益，而 $2^{-15}$ 是设计者选定的全局标度。
+
+\begin{warnbox}
+\textbf{位宽与符号问题（详见第 14 章 P2/P3）}：
+\begin{itemize}[leftmargin=1.2em,itemsep=1pt]
+\item \sig{sgn} 声明为 \sig{wire signed [4:0]}，但赋值为 \sig{4'b1111}。4bit 无符号量
+      补零扩展到 5bit 后是 \textbf{+15}，而不是 −1。若本意是负单位符号，应写 \sig{-5'sd1}。
+\item \sig{she} 声明 33bit，而 \sig{err1}（32bit）加 \sig{z2k0}（22bit）最大需要 34bit，
+      极端值会丢失最高位。
+\end{itemize}
+\end{warnbox}
+
+\subsection{验证与调参建议}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{先用仿真验证收敛}：给 \sig{e_in} 阶跃，观察 \sig{z1k0} 是否跟随、
+        \sig{z3k0} 是否稳定；如果 \sig{z3} 持续增长说明增益过大；
+  \item \textbf{用 ChipWatcher 观测}：Gowin EDA 的在线逻辑分析仪可以抓 \sig{z1k0..z3k0}，
+        注意它们没有引到顶层端口，需要先在顶层加观测输出或使用内部节点抓取；
+  \item \textbf{参数范围}：\sig{c}/\sig{k} 是 12bit 串口参数，写入 10/11bit 寄存器时会被截断，
+        上位机应把 \sig{c} 限制在 0$\sim$1023、\sig{k} 限制在 0$\sim$2047。
+\end{enumerate}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/eso.v}

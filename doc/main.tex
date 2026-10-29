@@ -1,0 +1,60 @@
+% =====================================================================
+%  main.tex -- 主文档
+%  编译: xelatex main.tex  (需两次以上以生成目录与交叉引用)
+% =====================================================================
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+\input{style}
+
+\title{\bfseries 高云 GW5A-25A FPGA 工程\\[2mm]
+       \texttt{project\_2025\_11\_07} 代码逐层解析与注释说明}
+\author{FPGA 代码解读报告}
+\date{2026 年 10 月}
+
+\begin{document}
+
+% ------------------------- 封面 -------------------------
+\begin{titlepage}
+\centering
+\vspace*{2.2cm}
+{\Huge\bfseries 高云 GW5A-25A FPGA 工程}\\[4mm]
+{\Huge\bfseries \texttt{project\_2025\_11\_07}}\\[6mm]
+{\LARGE 代码逐层解析与注释说明}\\[18mm]
+\begin{tabular}{rl}
+\toprule
+器件型号 & \sig{GW5A-LV25UG324C2/I1}（\sig{GW5A-25A}，UBGA324，速度等级 2）\\
+目标板卡 & AD/DA 采集 + 串口 + 数码管 + ADRC 控制演示板\\
+顶层模块 & \texttt{adda}（\file{src/adda.v}）\\
+工程文件 & \file{project_2025_11_07.gprj}（Gowin EDA V1.9.9 64-bit）\\
+对照工程 & \file{FPGA_TD/project_2025_11_07_TD.al}（Anlogic TD 6.0.3 浏览用容器）\\
+文档版本 & v1.0 \\
+生成日期 & 2026-10-29 \\
+\bottomrule
+\end{tabular}
+
+\vfill
+{\small 本报告覆盖工程中\textbf{全部} Verilog 源文件、IP 文件与物理约束文件；\\
+每个文件按“模块接口 $\rightarrow$ 语句块 $\rightarrow$ 关键语句/信号”三级层次逐块解析，\\
+并给出数值、时序与设计意图说明。所有源码均已在原位置添加中文注释，\\
+注释前后代码的 Verilog 词法内容经脚本比对完全一致（仅新增注释）。}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\input{ch01_overview}
+\input{ch02_adda}
+\input{ch03_rtl}
+\input{ch04_eso}
+\input{ch05_divider}
+\input{ch06_key}
+\input{ch07_uart_rx}
+\input{ch08_uart_tx}
+\input{ch09_seg}
+\input{ch10_bcd}
+\input{ch11_pll}
+\input{ch12_fifo}
+\input{ch13_cst}
+\input{ch14_review}
+\input{appendix}
+
+\end{document}

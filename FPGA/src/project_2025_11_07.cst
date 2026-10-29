@@ -1,0 +1,108 @@
+//==============================================================================
+// 文件: project_2025_11_07.cst   类型: Gowin 物理约束(引脚/电平)
+// 内容: 为 adda 顶层的 44 个端口分配 GW5A-25A(UBGA324) 的具体引脚,
+//       并规定 I/O 电气属性(PULL_MODE / DRIVE / BANK_VCCIO)。
+// 规则: IO_LOC  = 端口名 -> 器件引脚号(必须存在且不冲突);
+//       IO_PORT = 电气属性, PULL_MODE=NONE 无上下拉, DRIVE=8mA 驱动,
+//                 BANK_VCCIO=3.3 表示所在 Bank 的 IO 电压为 3.3V。
+// 备注: 全部 44 个端口均工作在 3.3V LVCMOS; sys_clk 在 T9(专用时钟引脚)。
+//==============================================================================
+//Copyright (C)2014-2023 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//Tool Version: V1.9.9 (64-bit)
+//Part Number: GW5A-LV25UG324C2/I1
+//Device: GW5A-25
+//Device Version: A
+//Created Time: Wed 10 22 16:26:14 2025
+
+//------------------------------------------------------------------------------
+// [LED 组] led7=B9 / led6=C14 / led0=D14, 3.3V 推挽输出, 8mA 驱动
+// led0 为按键状态指示, led6/led7 为串口参数接收指示(见 adda.v)
+//------------------------------------------------------------------------------
+IO_LOC "led7" B9;
+IO_PORT "led7" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "led6" C14;
+IO_PORT "led6" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "led0" D14;
+IO_PORT "led0" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [串口发送] tx=N18 (115200bps, 8N1); 对应 rx=P18(见下方)
+//------------------------------------------------------------------------------
+IO_LOC "tx" N18;
+IO_PORT "tx" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [DA 数据总线] ad_out[9:0] -> L13/F18/K13/G18/K14/D18/K16/G14/H14/C18
+// 注意: 比特顺序为 [9]->[0] 从上到下排列, 引脚均在 bank 0/1 的 3.3V 区。
+//------------------------------------------------------------------------------
+IO_LOC "ad_out[9]" L13;
+IO_PORT "ad_out[9]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[8]" F18;
+IO_PORT "ad_out[8]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[7]" K13;
+IO_PORT "ad_out[7]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[6]" G18;
+IO_PORT "ad_out[6]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[5]" K14;
+IO_PORT "ad_out[5]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[4]" D18;
+IO_PORT "ad_out[4]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[3]" K16;
+IO_PORT "ad_out[3]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[2]" G14;
+IO_PORT "ad_out[2]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[1]" H14;
+IO_PORT "ad_out[1]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[0]" C18;
+IO_PORT "ad_out[0]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [AD/DA 转换时钟] da_clk1=H13, ad_clk1=H18(由 divider 产生 1kHz 方波)
+//------------------------------------------------------------------------------
+IO_LOC "da_clk1" H13;
+IO_PORT "da_clk1" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_clk1" H18;
+IO_PORT "ad_clk1" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [串口接收] rx=P18
+//------------------------------------------------------------------------------
+IO_LOC "rx" P18;
+IO_PORT "rx" PULL_MODE=NONE BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [按键输入] key_in=B16(内部无上下拉, 依赖板载上拉)
+//------------------------------------------------------------------------------
+IO_LOC "key_in" B16;
+IO_PORT "key_in" PULL_MODE=NONE BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [AD 数据总线] ad_date[9:0] -> C17/K15/F14/J13/D17/K12/G16/L12/F17/H17
+// 这是外部 ADC 并行输出的 10bit 码值, 送 rtl(中值/电压) 与数码管显示
+//------------------------------------------------------------------------------
+IO_LOC "ad_date[9]" C17;
+IO_PORT "ad_date[9]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[8]" K15;
+IO_PORT "ad_date[8]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[7]" F14;
+IO_PORT "ad_date[7]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[6]" J13;
+IO_PORT "ad_date[6]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[5]" D17;
+IO_PORT "ad_date[5]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[4]" K12;
+IO_PORT "ad_date[4]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[3]" G16;
+IO_PORT "ad_date[3]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[2]" L12;
+IO_PORT "ad_date[2]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[1]" F17;
+IO_PORT "ad_date[1]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[0]" H17;
+IO_PORT "ad_date[0]" PULL_MODE=NONE BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [复位] sys_rst_n=A15, 低有效异步复位(按键复位)
+//------------------------------------------------------------------------------
+IO_LOC "sys_rst_n" A15;
+IO_PORT "sys_rst_n" PULL_MODE=NONE BANK_VCCIO=3.3;
+//------------------------------------------------------------------------------
+// [系统时钟] sys_clk=T9, 50MHz 有源晶振输入, 走全局时钟网络
+//------------------------------------------------------------------------------
+IO_LOC "sys_clk" T9;
+IO_PORT "sys_clk" PULL_MODE=NONE BANK_VCCIO=3.3;

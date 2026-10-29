@@ -1,0 +1,161 @@
+% =====================================================================
+%  ch10_bcd.tex
+% =====================================================================
+\section{二进制转 BCD 模块 \texttt{bcd}（\file{src/bcd.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/bcd.v}（注释后 98 行）\\
+模块 / 实例 & \texttt{bcd} / \sig{bcd_8421}（在 \texttt{seg} 内）\\
+算法 & 双 dabble / 移位加 3（Shift-Add-3）\\
+输入/输出 & 10bit 二进制 $\rightarrow$ 3 位 BCD（0$\sim$999）\\
+转换周期 & 24 个时钟（50MHz 下 480ns），连续转换，无握手\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{clk} & input & 1 & 50MHz\\
+\sig{rst_n} & input & 1 & 异步复位\\
+\sig{data} & input & 10 & 待转换的二进制数\\
+\sig{unit} & output & 4 & 个位 BCD\\
+\sig{ten} & output & 4 & 十位 BCD\\
+\sig{hun} & output & 4 & 百位 BCD\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{算法原理}
+
+“移位加 3”法与手算二进制转十进制的“每移一位检查是否超过 4”过程完全一致：
+把二进制从高位到低位逐位左移进 BCD 区；每移入一位之前，若某个 BCD 位 $>4$，
+就先给它 $+3$（因为移位相当于乘 2，+3 后再乘 2 恰好实现十进制进位）。
+
+本模块把“加 3”和“移位”拆到相邻两个时钟（\sig{shift_flag}=0/1 交替），
+因此每个二进制位需要 2 拍，10 位共 20 拍，加上装入与收尾共 \textbf{24 拍}。
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{块 1：相位计数（32--43 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        cnt_shift<=1'b0;
+    else if(cnt_shift==5'd11 && shift_flag)
+        cnt_shift<=1'b0;
+    else if(shift_flag)
+        cnt_shift<=cnt_shift+1'b1;
+    else
+        cnt_shift<=cnt_shift;
+\end{lstlisting}
+
+\sig{cnt_shift} 只在 \sig{shift_flag}=1 时步进，0$\sim$11 循环；11 之后回到 0 开始下一次转换。
+
+\subsubsection{块 2：移位/修正主过程（45--67 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        data_shift<=1'b0;
+    else if(!cnt_shift)
+        data_shift<={12'b0,data}; //目标 BCD 码三个数 12 位+10 位待转换数据
+    else if(cnt_shift<=10 && (!shift_flag)) //低判断
+        begin
+            data_shift[13:10]<=(data_shift[13:10]>4)? (data_shift[13:10]+2'd3):(data_shift[13:10]);
+            ...
+        end
+    else if(cnt_shift<=5'd10 && shift_flag) //高移位
+        data_shift<=data_shift<<1;
+    else
+        data_shift<=data_shift;
+\end{lstlisting}
+
+\sig{data_shift} 共 22bit：高 12bit 是三位 BCD，低 10bit 是待转换二进制。
+四个分支的优先级就是转换时序：\sig{cnt_shift}=0 装入；1$\sim$10 在 flag=0 时做加 3 修正、
+flag=1 时整体左移；11 时保持，等待输出。
+
+\subsubsection{块 3：相位标志（69--76 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        shift_flag<=1'b0;
+    else
+        shift_flag<=~shift_flag;
+\end{lstlisting}
+
+每拍翻转，把“修正”和“移位”严格分开，避免组合加法与移位在同一拍竞争。
+
+\subsubsection{块 4：结果锁存（78--96 行）}
+
+\begin{lstlisting}[style=vsnip]
+always @(posedge clk or negedge rst_n)
+    if(!rst_n)
+        begin
+            unit<=1'b0;
+            ten<=1'b0;
+            hun<=1'b0;
+        end
+    else if(cnt_shift==5'd11)
+        begin
+            unit<=data_shift[13:10];
+            ten<=data_shift[17:14];
+            hun<=data_shift[21:18];
+        end
+\end{lstlisting}
+
+相位到 11 时把 12bit BCD 拆成三路输出，供 \sig{seg} 使用。
+
+\subsection{转换实例}
+
+以 $753=10'b10\_1111\_0001$ 为例（BCD 区初值 000，逐位移入）：
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{753 的双 dabble 过程（每步已含“加 3 修正”与“左移并入一位”）}
+\begin{tabular}{cccl}
+\toprule
+步 & 移入位 & BCD（十六进制） & 十进制读数\\
+\midrule
+0（装入） & — & 0x000 & 000\\
+1 & 1 & 0x001 & 001\\
+2 & 0 & 0x002 & 002\\
+3 & 1 & 0x005 & 005\\
+4 & 1 & 0x011 & 011（个位 5 加 3 后移位）\\
+5 & 1 & 0x023 & 023\\
+6 & 1 & 0x047 & 047\\
+7 & 0 & 0x094 & 094（十位 7 加 3 后移位）\\
+8 & 0 & 0x188 & 188\\
+9 & 0 & 0x376 & 376\\
+10 & 1 & 0x753 & 753（正确）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+同理可算出 $1023=10'b11\_1111\_1111$ 的最终结果是 0x023，即\textbf{千位被丢弃}，
+显示为“023”——这正是第 9 章所述满码回绕的根源。
+
+\begin{warnbox}
+\textbf{位数不足}：10bit 数据最大 1023，需要 4 位 BCD（16bit）；本模块只保留 3 位
+（12bit），因此 1000$\sim$1023 会溢出。若希望数码管正确显示 0$\sim$1023，
+应把 \sig{data_shift} 扩到 26bit（BCD 16bit + 数据 10bit），并增加第四组
+“加 3”判断与 \sig{thou} 输出，同时把 \sig{seg} 的 \sig{data_reg} 扩到 5 个 nibble。
+\end{warnbox}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/bcd.v}

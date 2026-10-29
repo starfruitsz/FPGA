@@ -1,0 +1,517 @@
+% =====================================================================
+%  ch02_adda.tex -- 第 2 章 顶层模块 adda.v
+% =====================================================================
+\section{顶层模块 \texttt{adda}（\file{src/adda.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 内容\\
+\midrule
+文件路径 & \file{FPGA/src/adda.v}（注释后 417 行）\\
+模块名 / 实例名 & \texttt{adda} / 顶层（Top Module）\\
+工程中的角色 & 数据通路的汇聚点：连接 ADC/DAC、串口、数码管、按键\\
+参数 & \sig{CNT_DATA_MAX=1024}、\sig{CNT_MAX=1299999}\\
+端口 & 44 个（16 输入 + 28 输出）\\
+时钟/复位 & \sig{sys_clk}=50MHz、\sig{sys_rst_n} 低有效异步复位\\
+综合结果 & 575 LUT / 375 REG / 7 DSP（含子模块）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：模块接口}
+
+\subsubsection{端口}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{adda 端口表}
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明 / 连接去向\\
+\midrule
+\sig{sys_clk} & input & 1 & 50MHz 系统时钟（引脚 T9）\\
+\sig{sys_rst_n} & input & 1 & 异步复位，低有效（引脚 A15）\\
+\sig{ad_date} & input & 10 & 外部 ADC 并行码值（偏移二进制 0$\sim$1023）\\
+\sig{key_in} & input & 1 & 按键，1=松开，0=按下（引脚 B16）\\
+\sig{ad_clk} & input & 1 & 预留的外部 AD 时钟输入（\textbf{本设计未使用}）\\
+\sig{da_clk} & input & 1 & 预留的外部 DA 时钟输入（\textbf{本设计未使用}）\\
+\sig{rx} & input & 1 & 串口接收（引脚 P18）\\
+\midrule
+\sig{ad_clk1} & output & 1 & 送 AD 的转换时钟（1kHz，来自 divider）\\
+\sig{da_clk1} & output & 1 & 送 DA 的转换时钟（1kHz，来自 divider）\\
+\sig{ad_out} & output & 10 & 送 DAC 的数据（偏移二进制）\\
+\sig{sel} & output & 4 & 数码管位选（低有效）\\
+\sig{seg} & output & 8 & 数码管段选（bit7=小数点，“1”点亮）\\
+\sig{tx} & output & 1 & 串口发送（引脚 N18）\\
+\sig{led0} & output & 1 & 按键状态指示（1=直通 AD，0=输出控制量）\\
+\sig{led6} & output & 1 & 每收到一帧 B 参数翻转一次\\
+\sig{led7} & output & 1 & 每收到一帧 A 参数翻转一次\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{参数}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+参数 & 值 & 用途\\
+\midrule
+\sig{CNT_DATA_MAX} & \sig{11'd1024} & 与 \sig{rtl} 的内部常数一致；\textbf{本模块内未使用}\\
+\sig{CNT_MAX} & \sig{25'd12_999_9}=1\,299\,999 & 26ms 定时器上限，仅用于产生 \sig{pi_flag}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 2 层：内部结构与语句块索引}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{adda 的语句块索引（行号对应本章末尾的完整源码）}
+\begin{tabular}{cll}
+\toprule
+行号 & 类型 & 功能\\
+\midrule
+106 & initial & \sig{po_flag2} 上电清 0\\
+115 & assign & 把 \sig{ad_date} 拆成低 8 位 / 高 2 位供串口发送\\
+120 & always & 块 1：ADC 码值去偏置（减 512）\\
+130 & always & 块 2：DA 输出数据选择 + \sig{led0}\\
+162 & always & 块 3：26ms 自由计数器\\
+174 & always & 块 4：\sig{pi_flag} 单周期脉冲（死逻辑）\\
+187 & always & 块 5：串口 16bit 指令组帧\\
+213 & always & 块 6：组帧完成脉冲 \sig{po_flag3}\\
+225 & always & 块 7：解析 B 帧 $\rightarrow$ k 参数\\
+247 & always & 块 8：解析 A 帧 $\rightarrow$ c 参数\\
+272 & 例化 & \texttt{key} $\rightarrow$ \sig{key_inst}\\
+283 & 例化 & \texttt{seg} $\rightarrow$ \sig{seg_inst}\\
+298 & 例化 & \texttt{rtl} $\rightarrow$ \sig{adc_inst}\\
+310 & 例化 & \texttt{eso} $\rightarrow$ \sig{eso_inst}\\
+330 & 例化 & \texttt{uart\_rx} $\rightarrow$ \sig{uart_rx_inst}\\
+347 & 例化 & \texttt{uart\_tx} $\rightarrow$ \sig{uart_tx_inst}\\
+380 & 例化 & \texttt{divider} $\rightarrow$ \sig{divider_inst}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{adda 的内部信号}
+\begin{tabular}{llp{7.2cm}}
+\toprule
+信号 & 类型/位宽 & 作用\\
+\midrule
+\sig{key_out} & wire & 消抖后的按键电平（1=未按，0=按下）\\
+\sig{volt} & wire [9:0] & rtl 输出的电压值（本模块未使用）\\
+\sig{sign} & wire & 码值低于中值，送 seg 显示负号\\
+\sig{date_y} & reg signed [9:0] & \sig{ad_date-512}，ESO 的误差输入\\
+\sig{date_u} & wire signed [9:0] & ESO 输出控制量，回送 ESO 的 \sig{u_out}\\
+\sig{po_data}/\sig{po_flag} & wire [7:0]/wire & 串口接收字节与有效脉冲\\
+\sig{ad_pingj0/1} & wire [7:0] & 串口发送数据的低 8 位、高 2 位\\
+\sig{po_flag2} & reg & 16bit 组帧的奇偶标志\\
+\sig{po_flag3} & reg & 16bit 完整接收脉冲\\
+\sig{pi_flag} & reg & 26ms 脉冲，\textbf{无负载（死逻辑）}\\
+\sig{rx_date} & reg [15:0] & 收到的 16bit 指令字\\
+\sig{c_date}/\sig{k_date} & reg [11:0] & 指令字中的 12bit 参数\\
+\sig{c_flag}/\sig{k_flag} & reg & 参数更新标志（置 1 后不清零）\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 3 层：语句块逐块解析}
+
+\subsubsection{上电初值：\sig{po_flag2}（106--113 行）}
+
+\begin{lstlisting}[style=vsnip]
+initial
+    begin
+        po_flag2=1'b0;
+    end
+\end{lstlisting}
+
+上电时把 \sig{po_flag2} 清 0，保证串口收到的第一个字节写入 \sig{rx_date[15:8]}。
+Gowin 器件支持 FF 上电初值（综合为 \sig{INIT=0}），因此可综合；但更规范的写法是在
+\sig{po_flag2} 所在的时序块复位分支里清零（当前该块 187 行并没有复位分支）。
+
+\subsubsection{发送数据拆分（115--116 行）}
+
+\begin{lstlisting}[style=vsnip]
+assign ad_pingj0={ad_date[7:0]};
+assign ad_pingj1={6'b000000,ad_date[9:8]};
+\end{lstlisting}
+
+把 10bit 码值拆成两个字节，高位字节只用低 2 位。347 行的 \sig{uart_tx} 例化把二者拼成
+16bit：\sig{{ad_pingj0, ad_pingj1}}。由于 \sig{uart_tx} 先发 \sig{pi_data[7:0]}，
+上位机收到的顺序是“低字节在前、高字节在后”，解析时应按小端处理。
+
+\subsubsection{块 1：ADC 去偏置（120--128 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        date_y<=10'd0;
+    else
+        date_y<=ad_date-10'd512; //0-1024 变 -512-512
+\end{lstlisting}
+
+ADC 输出 0$\sim$1023 的偏移二进制，中点 512 对应 0V。减去 512 后得到 $-512\sim+511$ 的
+有符号量，作为 ESO 的误差输入 \sig{e_in}（\sig{eso} 内部再取负号得到 $y=512-\text{ADC}$）。
+10bit 减法溢出回绕正好等价于补码，因此无需显式符号扩展，\sig{date_y} 声明为
+\sig{signed [9:0]} 即可。
+
+\subsubsection{块 2：DA 输出选择（130--160 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        ad_out<=10'd0;
+    else if(key_out==1'b0)
+        begin
+            ad_out<=~ad_date; //按下输出 ad 读数
+            led0<=1'b1;
+        end
+    else
+        begin
+            ad_out<=~date_u+10'd512; //按下输出控制量，0 灯亮
+            led0<=1'b0;
+        end
+\end{lstlisting}
+
+两种工作模式由按键状态 \sig{key_out} 选择：
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+\sig{key_out} & \sig{ad_out} & \sig{led0} & 含义\\
+\midrule
+0（按下） & \sig{~ad_date} & 1 & 直通：把 ADC 原始码取反后送 DAC\\
+1（松开） & \sig{~date_u+10'd512} & 0 & 控制：把 ESO 的控制量整形成偏移二进制\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\sig{~x} 在 10bit 上等于 $1023-x$，因此第一行是“反相直通”，第二行
+$\sim u+512 = 511-u$ 也是“反相 + 加偏置”。这个反相构成 ADC$\rightarrow$ESO$\rightarrow$DAC
+回路的负反馈方向，是否与被控对象实际极性匹配，需要结合模拟板子确认（若方向相反，
+表现为自激或发散）。\sig{led0} 与 \sig{ad_out} 在同一时钟块中赋值，二者严格同拍。
+
+\begin{warnbox}
+\sig{~date_u} 中 \sig{date_u} 是 \sig{signed} 而 \sig{10'd512} 是 \sig{unsigned}，
+Verilog 会把整个表达式按无符号解释。当前写法在数值上等价于 $511-u$（模 1024），
+但建议显式写成 \sig{10'd511 - date_u} 或统一为无符号，避免可读性陷阱。
+\end{warnbox}
+
+\subsubsection{块 3/块 4：26ms 定时器与 \sig{pi_flag}（162--185 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        cnt <= 25'b0;
+    else if(cnt == CNT_MAX)
+        cnt <= 25'b0;
+    else
+        cnt <= cnt + 1'b1;
+\end{lstlisting}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        pi_flag <= 1'b0;
+    else if(cnt == CNT_MAX-1'b0) //tx 发送过快后分配
+        pi_flag <= 1'b1;
+    else
+        pi_flag <= 1'b0;
+\end{lstlisting}
+
+\sig{cnt} 从 0 数到 \sig{CNT_MAX}=1\,299\,999 后归零，周期为
+$(1\,299\,999+1)/50\text{MHz}=26\ \text{ms}$；在计满前一拍产生一个周期的 \sig{pi_flag}。
+
+\textbf{但 \sig{pi_flag} 在本模块中没有任何负载}：\sig{uart_tx} 的 \sig{pi_flag} 端口在
+347 行被固定接成 \sig{1'b1}。因此块 3、块 4 综合时会被整体优化，只留下一个悬空网络。
+这属于历史遗留（注释里写着“tx 发送过快后分配”），如确实需要“每 26ms 发一帧”，
+应把 \sig{pi_flag} 接到 \sig{uart_tx} 的 \sig{pi_flag}，并把常值 1 去掉。
+
+\subsubsection{块 5：串口 16bit 组帧（187--211 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        rx_date<=16'd0;
+    else if((po_flag == 1'b1)&&(po_flag2==1'b0))
+        begin
+            rx_date<={po_data,8'd0}; //先赋高八位
+            po_flag2<=1'b1;
+        end
+    else if((po_flag == 1'b1)&&(po_flag2==1'b1))
+        begin
+            rx_date<={rx_date[15:8],po_data}; //再赋低八位拼接十六位
+            po_flag2<=1'b0;
+        end
+    else
+        begin
+            rx_date<=rx_date;
+            po_flag2<=po_flag2;
+        end
+\end{lstlisting}
+
+状态机只有两个状态，由 \sig{po_flag2} 表示：0 表示“等高字节”，1 表示“等低字节”。
+上位机必须\textbf{严格按两字节一帧、连续发送}，且第一字节是高字节（含 A/B 标志），
+第二字节是低字节；中间若丢字节会造成整帧错位，直到下一次 \sig{po_flag2} 复位为止。
+
+\subsubsection{块 6：组帧完成脉冲（213--223 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        po_flag3 <= 1'b0;
+    else if((po_flag==1'b1)&&(po_flag2==1'b1))
+        po_flag3 <= 1'b1;
+    else
+        po_flag3 <= 1'b0;
+\end{lstlisting}
+
+当第 2 个字节到达的同一拍（此时 \sig{po_flag2} 仍为 1），\sig{po_flag3} 置 1 且只保持
+一个周期，作为块 7/块 8 的解析使能。这种“用前一状态的标志做使能”的写法依赖非阻塞赋值的
+同拍读取特性，可读性一般但功能正确。
+
+\subsubsection{块 7：解析 B 帧（k 参数）（225--245 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        led6<=1'b1;
+    else if((rx_date[15:12]==4'HB)&&(po_flag3==1'B1))
+        begin
+            led6<=~led6;
+            k_flag<=1'b1;
+            k_date<=rx_date[11:0];
+        end
+    else
+        begin
+            led6<=led6;
+            //k_flag<=1'b0;
+            k_date<=k_date;
+        end
+\end{lstlisting}
+
+帧头高 4bit 为 \sig{4'hB} 时判为 k 参数帧，取低 12bit 存入 \sig{k_date}，同时翻转
+\sig{led6} 作接收提示。注意两点：其一，\sig{k_flag} 置 1 后\textbf{没有清零分支}
+（被注释掉了），因此它一旦为 1 就永久保持；其二，\sig{k_date} 没有复位分支，
+复位后是 X（实际由上电初值决定），不会影响功能，但仿真时需注意。
+
+\subsubsection{块 8：解析 A 帧（c 参数）（247--270 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        led7<=1'b1;
+    else if((rx_date[15:12]==4'HA)&&(po_flag3==1'B1))
+        begin
+            led7<=~led7;
+            c_flag<=1'b1;
+            c_date<=rx_date[11:0];
+        end
+    else
+        begin
+            led7<=led7;
+            //c_flag<=1'b0;
+            c_date<=c_date;
+        end
+\end{lstlisting}
+
+结构与块 7 完全对称，只是帧头为 \sig{4'hA}，目标参数是 \sig{c}。
+
+\begin{warnbox}
+\textbf{重要缺陷}：\sig{c_flag} 与 \sig{k_flag} 都是“置 1 后永不清零”，而
+\sig{eso.v} 中参数更新写成了
+\mbox{\sig{if(c_flag) c<=c_date; else if(k_flag) k<=k_date;}} 的\textbf{优先级结构}。
+后果是：只要收到过一帧 A 参数，\sig{c_flag} 就恒为 1，此后 \textbf{k 参数永远无法再更新}。
+上位机表现为“先发 A 帧调 c 正常，之后发 B 帧调 k 完全没反应”。
+修复方式：把两个标志都改成单周期脉冲（解析时置 1，下一拍清 0），或把 \sig{eso} 中
+的两个分支改为互不排斥的并行 \sig{if}。详见第 14 章 P1。
+\end{warnbox}
+
+\subsubsection{例化 1：\texttt{key}（272--282 行）}
+
+\begin{lstlisting}[style=vsnip]
+key key_inst
+(
+    .key_in(key_in),
+    .sys_clk(sys_clk),
+    .sys_rst_n(sys_rst_n),
+    .key_out(key_out)
+);
+\end{lstlisting}
+
+按键消抖，输出翻转式电平 \sig{key_out}，供块 2 选择 DA 输出模式（详见第 6 章）。
+
+\subsubsection{例化 2：\texttt{seg}（283--297 行）}
+
+\begin{lstlisting}[style=vsnip]
+seg seg_inst
+(
+    .clk(sys_clk),
+    .rst_n(sys_rst_n),
+    .point(4'b0100),
+    .data(ad_date), //gai
+    .seg_en(1'b1),
+    .sign(sign),
+    .sel(sel),
+    .seg(seg)
+);
+\end{lstlisting}
+
+显示 \sig{ad_date} 的十进制值。\sig{point=4'b0100} 表示小数点固定在第 3 位（百位），
+所以显示格式形如 “1.23V”？——注意 \sig{point} 只控制小数点位置，并不显示单位；
+而 \sig{bcd} 只能转 3 位十进制，因此 1000 以上会丢失千位（见第 10 章）。
+\sig{seg_en=1'b1} 常开。
+
+\subsubsection{例化 3：\texttt{rtl}（298--309 行）}
+
+\begin{lstlisting}[style=vsnip]
+rtl adc_inst
+(
+    .clk(sys_clk),
+    .rst_n(sys_rst_n),
+    .ad_data(ad_date),
+    .sign(sign),
+    .volt(volt)
+);
+\end{lstlisting}
+
+中值提取与电压换算，输出 \sig{sign} 供数码管显示负号；\sig{volt} 虽有连接，但在顶层
+没有任何负载，综合后会连内部逻辑一起被裁剪掉绝大部分（因此实际资源里并没有完整的
+31bit 电压通路）。
+
+\subsubsection{例化 4：\texttt{eso}（310--329 行）}
+
+\begin{lstlisting}[style=vsnip]
+eso eso_inst
+(
+    .ad_clk(ad_clk1),
+    .sys_rst_n(sys_rst_n),
+    .e_in(date_y),
+    .u_out(date_u),
+    .out_da(date_u),
+    .c_flag(c_flag),
+    .k_flag(k_flag),
+    .c_date(c_date),
+    .k_date(k_date)
+);
+\end{lstlisting}
+
+这是全设计的“算法核心”，共 9 个乘法器。注意三个细节：
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+\item 时钟用的是 \sig{ad_clk1}（1kHz），即控制律每 1ms 运算一次，与 AD/DA 转换同步；
+\item \sig{out_da} 与 \sig{u_out} 接在\textbf{同一根 wire} \sig{date_u} 上：
+      \sig{out_da} 是输出（驱动），\sig{u_out} 是输入（负载），因此 \sig{date_u}
+      既是控制量输出、又是 ESO 内部的 $\beta_0 u$ 反馈项，构成一个延迟一拍的闭环；
+\item \sig{z1k0/z2k0/z3k0} 三个观测状态输出\textbf{悬空未连接}，只在本模块内部使用。
+\end{enumerate}
+
+\subsubsection{例化 5：\texttt{uart\_rx}（330--346 行）}
+
+\begin{lstlisting}[style=vsnip]
+uart_rx
+#(
+    .UART_BPS(115200),
+    .CLK_FREQ(50_000_000)
+)
+uart_rx_inst
+(
+    .sys_clk(sys_clk),
+    .sys_rst_n(sys_rst_n),
+    .rx(rx),
+    .po_data(po_data),
+    .po_flag(po_flag)
+);
+\end{lstlisting}
+
+115200bps、8N1。50MHz 下每位 434 个时钟，接收端在位中点采样（详见第 7 章）。
+
+\subsubsection{例化 6：\texttt{uart\_tx}（347--379 行）}
+
+\begin{lstlisting}[style=vsnip]
+uart_tx
+#(
+    .UART_BPS(115200),
+    .CLK_FREQ(50_000_000)
+)
+uart_tx_inst
+(
+    .sys_clk(sys_clk),
+    .sys_rst_n(sys_rst_n),
+    //.pi_data(rx_date),//tx 先发低八位，所以 tx 值跟实际 rx_date 顺序颠倒，不影响 rx_date数值
+    .pi_data({ad_pingj0,ad_pingj1}),
+    .pi_flag(1'b1),
+
+    .tx(tx)
+);
+\end{lstlisting}
+
+\sig{pi_flag} 接常值 1'b1，意味着发送器\textbf{自由连续发送}：一帧 21 个位时隙
+（$\approx182\ \mu$s）发完立即开始下一帧，串口线被本设计独占。发送内容是
+\sig{{ad_date[7:0], 6'h0, ad_date[9:8]}}，即 16bit 小端数值。
+
+\subsubsection{例化 7：\texttt{divider}（380--416 行）}
+
+\begin{lstlisting}[style=vsnip]
+divider
+#(
+    .cnt_max(24999)
+)
+divider_inst(
+    .sys_clk(sys_clk),
+    .sys_rst_n(sys_rst_n),
+    .clk0(ad_clk1),
+    .clk1(da_clk1)
+);
+\end{lstlisting}
+
+分频产生 1kHz 的 AD/DA 转换时钟：$50\text{MHz}/(2\times(24999+1))=1\text{kHz}$。
+两路输出同相同频。注意 \sig{divider} 的参数注释写“500 分频”，实际是 50000 分频，
+以代码中的 24999 为准。
+
+\subsection{时序与数值示例}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{adda 中的时间基准}
+\begin{tabular}{lll}
+\toprule
+事件 & 周期公式 & 实际值\\
+\midrule
+26ms 定时器 & $(1299999+1)/50\text{MHz}$ & 26.0 ms\\
+AD/DA 转换时钟 & $2\times25000/50\text{MHz}$ & 1 kHz\\
+一帧串口数据 & $21\times434/50\text{MHz}$ & 182.3 $\mu$s\\
+中值标定 & $1024/50\text{MHz}$ & 20.5 $\mu$s\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{本章小结}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+\item 顶层是一个“三出口”结构：AD 数据同时送 \sig{seg}（看）、\sig{uart_tx}（传）、
+      以及经 \sig{rtl}/\sig{eso}（算）后送 DAC；
+\item 控制通道的参数由串口下发，帧约定为 16bit、大端发送（高字节在前），
+      高 4bit 是 A/B 标签，低 12bit 是参数值；
+\item \sig{pi_flag}、\sig{ad_clk/da_clk}、\sig{volt}、\sig{seg_date} 等属于历史遗留或
+      预留信号，读者不必在它们身上寻找功能；
+\item 两个 IP（PLL、FIFO）作为“工程装饰”存在于文件列表中，不参与综合。
+\end{itemize}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/adda.v}

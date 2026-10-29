@@ -1,0 +1,157 @@
+% =====================================================================
+%  ch08_uart_tx.tex
+% =====================================================================
+\section{串口发送模块 \texttt{uart\_tx}（\file{src/uart_tx.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/uart_tx.v}（注释后 136 行）\\
+模块 / 实例 & \texttt{uart\_tx} / \sig{uart_tx_inst}\\
+功能 & 一次发送 16bit（两帧 8N1 连续发出）\\
+参数 & \sig{UART_BPS}=115200，\sig{CLK_FREQ}=50MHz，\sig{BAUD_CNT_MAX}=434\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{sys_clk} & input & 1 & 50MHz\\
+\sig{sys_rst_n} & input & 1 & 异步复位\\
+\sig{pi_data} & input & 16 & 待发送数据（低字节先发）\\
+\sig{pi_flag} & input & 1 & 发送启动（本工程恒为 1，自由连续发送）\\
+\sig{tx} & output & 1 & 串口输出，空闲为 1\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{帧结构}
+
+一次“发送”占 21 个位时隙，等于把 16bit 拆成两帧 8N1 背靠背发出：
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{发送时隙表（\sig{bit_cnt}）}
+\begin{tabular}{cll}
+\toprule
+时隙 & 输出 & 含义\\
+\midrule
+0 & 0 & 第 1 帧起始位\\
+1--8 & \sig{pi_data[0..7]} & 第 1 字节（LSB 先发）\\
+9、10 & 1、1 & 两个停止位（帧间空闲）\\
+11 & 0 & 第 2 帧起始位\\
+12--19 & \sig{pi_data[8..15]} & 第 2 字节\\
+20 & 1 & 停止位\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+一帧耗时 $21\times434/50\text{MHz}=182.3\,\mu$s。由于顶层把 \sig{pi_flag} 接成常量 1，
+\sig{work_en} 在每个位时隙都会重新置位，发送器实际上\textbf{不停机}，串口线上是连续的
+“16bit 数据 + 1 个额外停止位”流。
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{块 1：忙标志（48--58 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        work_en<=1'b0;
+    else if(pi_flag==1'b1)
+        work_en<=1'b1;
+    else if((bit_cnt==5'd20)&&(bit_flag==1'b1))
+        work_en<=1'b0;
+\end{lstlisting}
+
+\sig{pi_flag} 到来即启动；发到最后一个时隙（停止位）后自动结束。
+注意这里没有 \sig{else work_en<=work_en}，但因为有复位分支且条件覆盖完整（两个 if 都不成立时
+保持），综合结果仍是寄存器（保持行为）。
+
+\subsubsection{块 2：位内计数（60--69 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        baud_cnt<=16'd0;
+    else if((work_en==1'b0)||(baud_cnt==BAUD_CNT_MAX-1))
+        baud_cnt<=16'd0;
+    else if(work_en==1'b1)
+        baud_cnt<=baud_cnt+16'd1;
+\end{lstlisting}
+
+空闲清零，忙时 0$\sim$433 循环，给出 8.68$\mu$s 的位节拍。
+
+\subsubsection{块 3：位起始脉冲（71--81 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        bit_flag<=1'b0;
+    else if(baud_cnt==16'd1)
+        bit_flag<=1'b1;
+    else
+        bit_flag<=1'b0;
+\end{lstlisting}
+
+与接收端不同，发送端在**位起始**（计数=1）而不是位中点动作，这样 \sig{tx} 的电平切换
+发生在每位边界，留出整整一个位周期的稳定时间。
+
+\subsubsection{块 4：位序号（83--92 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        bit_cnt<=5'd0;
+    else if((bit_cnt==5'd20)&&(bit_flag==1'b1))
+        bit_cnt<=5'd0;
+    else if((bit_flag==1'b1)&&(work_en==1'b1))
+        bit_cnt<=bit_cnt+5'd1;
+\end{lstlisting}
+
+0$\sim$20 循环，共 21 个时隙。
+
+\subsubsection{块 5：发送数据查表（94--134 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        tx<=1'b1;
+    else if(bit_flag==1'b1)
+        case(bit_cnt)
+            0:tx<=1'b0;
+            1:tx<=pi_data[0];
+            ...
+            9:tx<=1'b1;
+            10:tx<=1'b1;
+            11:tx<=1'b0;
+            12:tx<=pi_data[8];
+            ...
+            20:tx<=1'b1;
+            default:tx<=1'b1;
+        endcase
+\end{lstlisting}
+
+用 \sig{case} 直接把“时隙号”映射成“电平”，等价于一个 21 级状态机，但不需要状态寄存器。
+每个时隙开始时（\sig{bit_flag}=1）更新一次 \sig{tx}。
+
+\begin{tipbox}
+\textbf{为什么先发低字节？} \sig{case} 中 \sig{pi_data[0..7]} 在前（时隙 1--8），
+\sig{pi_data[8..15]} 在后（时隙 12--19）。顶层 \sig{pi_data = {ad_date[7:0], 6'h0, ad_date[9:8]}}
+中低字节正是 \sig{ad_date[7:0]}，因此上位机按小端（低字节先到）解析即可还原 AD 码值。
+\end{tipbox}
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/uart_tx.v}

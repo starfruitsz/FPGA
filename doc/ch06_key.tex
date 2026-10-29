@@ -1,0 +1,109 @@
+% =====================================================================
+%  ch06_key.tex
+% =====================================================================
+\section{按键消抖模块 \texttt{key}（\file{src/key.v}）}
+
+\subsection{文件信息}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+文件路径 & \file{FPGA/src/key.v}（注释后 61 行）\\
+模块 / 实例 & \texttt{key} / \sig{key_inst}\\
+功能 & 20ms 软件消抖，输出“按一次翻转一次”的电平\\
+参数 & \sig{CNT_MAX}=999999\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{第 1 层：接口}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+端口 & 方向 & 位宽 & 说明\\
+\midrule
+\sig{key_in} & input & 1 & 按键输入，1=松开，0=按下（低有效）\\
+\sig{sys_clk} & input & 1 & 50MHz\\
+\sig{sys_rst_n} & input & 1 & 异步复位，低有效\\
+\sig{key_out} & output & 1 & 翻转式状态：每次有效按下翻转一次\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{第 3 层：语句块解析}
+
+\subsubsection{块 1：消抖计时（29--44 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n==1'b0)
+        cnt_20ms<=20'd0;
+    else if(key_in==1'b1) //没按下保持 0
+        cnt_20ms<=20'd0;
+    else if(key_in==1'b0 && cnt_20ms==CNT_MAX) //非抖动确定按下，保持计数值
+        cnt_20ms<=cnt_20ms;
+    else
+        cnt_20ms<=cnt_20ms+1'b1; //按下后计数 20ms
+\end{lstlisting}
+
+计数器的行为可以总结为三种情况：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+条件 & 计数器动作 & 含义\\
+\midrule
+\sig{key_in}=1 & 清零 & 松开即重新计时（消抖关键）\\
+按下且未计满 & +1 & 累计按住时间\\
+按下且已计满 & 保持 & 防止溢出，锁定“已确认按下”状态\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+由于松开立刻清零，按键抖动期间的短暂按下无法累计到 20ms，从而被过滤掉。
+
+\subsubsection{块 2：翻转输出（46--59 行）}
+
+\begin{lstlisting}[style=vsnip]
+always@(posedge sys_clk or negedge sys_rst_n)
+    if(sys_rst_n == 1'b0)
+        key_out <= 1'b1;
+    else if(cnt_20ms == CNT_MAX - 1'b1)
+        key_out <= ~key_out;
+    else
+        key_out <= key_out;
+\end{lstlisting}
+
+在“计满前一拍”（999999）翻转 \sig{key_out}，此时按键已稳定按下约 20ms。
+因为计满后计数器保持 1000000 不再回到 999999，所以一次按住只会翻转一次；
+松开后计数器清零，下一次按下重新开始。复位值为 1（未按状态）。
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{消抖时间}
+\begin{tabular}{lll}
+\toprule
+量 & 公式 & 数值\\
+\midrule
+消抖计数 & \sig{CNT_MAX}+1 & 1\,000\,000 拍\\
+消抖时间 & $10^6/50\text{MHz}$ & 20.0 ms\\
+可识别的最短按键 & $>20$ms & 20 ms\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{本章小结}
+
+这是一个标准的“计数消抖 + 翻转输出”实现，缺点是按键按住期间计数器停在 1000000，
+若松开时抖动会短暂清零/重新计数，但不影响已翻转的结果。若需要“长按连发”，
+可以在块 2 中增加“按住超过 1s 后周期翻转”的分支。
+
+\subsection{完整注释源码}
+
+\lstinputlisting[style=vcode]{../FPGA/src/key.v}

@@ -1,0 +1,151 @@
+% =====================================================================
+%  ch14_review.tex
+% =====================================================================
+\section{设计审查、缺陷清单与改进建议}
+
+\subsection{设计意图复原}
+
+综合代码与注释，可以还原出作者的设计意图：这是一块“AD 采样 $\rightarrow$ 观测/控制
+$\rightarrow$ DA 输出”的 ADRC（自抗扰控制）教学实验板，核心链路为
+
+\begin{center}
+\small
+AD 码值 $\rightarrow$ 去偏置($-512$) $\rightarrow$ ESO 观测/控制 $\rightarrow$ 偏移二进制
+$\rightarrow$ DAC；\\
+同一路 AD 数据同时送数码管显示、并每 182$\mu$s 通过串口上报；\\
+上位机用 “Axxx/Bxxx” 两字节帧在线修改 ESO 的 $c$、$k$；\\
+按键切换“直通 AD 回环”与“输出控制量”两种工作模式。
+\end{center}
+
+\subsection{缺陷与风险清单}
+
+\begin{longtable}{p{0.6cm}p{2.6cm}p{5.6cm}p{4.6cm}}
+\toprule
+编号 & 位置 & 现象 & 后果 / 建议\\
+\midrule
+\endhead
+P1 & \file{adda.v} 块7/8 + \file{eso.v} 块2 & \sig{c_flag}/\sig{k_flag} 置 1 后不清零，
+而 ESO 参数更新为 \sig{if/else-if} 优先级结构 & 收到过 A 帧后 k 参数永久无法更新。
+建议两个标志改为单周期脉冲，或 ESO 内改为两个独立 \sig{if}\\
+\midrule
+P2 & \file{eso.v} 语句组 9 & \sig{sgn} 是 5bit signed，却赋 \sig{4'b1111}（补零后 = +15） & 符号项实际加 +15 而非 −1，
+控制量存在固定偏置。建议写 \sig{-5'sd1} 或 \sig{she>0 ? 5'sd1 : -5'sd1}\\
+\midrule
+P3 & \file{eso.v} 语句组 7 & \sig{she} 仅 33bit，$c z_1$(32bit) + $z_2$(22bit) 最大需 34bit & 极端值截断丢符号位。
+建议加宽到 34bit\\
+\midrule
+P4 & \file{bcd.v} & 10bit 输入只用 3 位 BCD（0$\sim$999） & AD 码 $\ge$1000 时显示回绕（1023$\rightarrow$023）。
+建议扩展为 4 位 BCD（26bit 移位寄存器）\\
+\midrule
+P5 & \file{adda.v} 块3/4/例化6 & \sig{pi_flag} 产生但无负载；\sig{uart_tx} 的 \sig{pi_flag} 固定 1 & 26ms 定时逻辑被综合删除；
+串口自由连续发送，占用 100\% 串口带宽。若需定速上报应改接 \sig{pi_flag}\\
+\midrule
+P6 & \file{seg.v} 块5/块9 & \sig{sel_reg} 6bit 而 \sig{sel} 4bit，靠截断实现两个空时隙 & 功能正确但可读性差，
+建议显式取 \sig{sel_reg[3:0]} 或把位选设计成 4 位一轮\\
+\midrule
+P7 & \file{seg.v} 块7 & \sig{point[cnt_sel]} 中 \sig{cnt_sel} 可达 5，而 \sig{point} 只有 4 位 & 越界索引，仿真读 X、综合按 0，
+建议 \sig{point} 改成 6 位或对索引做保护\\
+\midrule
+P8 & \file{divider.v} & 普通寄存器输出直接当时钟用；注释“500 分频”与实际 50000 分频不符 & 高频下时钟质量差；
+注释误导。建议改用 PLL 或时钟使能，并修正注释\\
+\midrule
+P9 & \file{adda.v} 端口 & \sig{ad_clk}、\sig{da_clk} 输入端口从未使用 & 悬空端口被裁剪，
+浪费 2 个引脚约束意图，建议删除\\
+\midrule
+P10 & \file{adda.v} 106 行 & 用 \sig{initial} 初始化 \sig{po_flag2} & 可综合但可移植性差，
+建议改到所在时序块的复位分支\\
+\midrule
+P11 & \file{.cst} & \sig{sel}/\sig{seg} 共 12 个引脚未约束，被自动布局 & 重新 PnR 后数码管引脚可能变化，
+建议补全约束（见第 13 章）\\
+\midrule
+P12 & 工程文件列表 & \file{gowin_pll.v}、\file{fifo_top.v} 未例化却参与工程 & 增加编译时间、误导资源评估，
+建议移出工程或标注\\
+\bottomrule
+\end{longtable}
+
+\subsection{重点问题详解}
+
+\subsubsection{P1：参数更新优先级导致 k 失效}
+
+\begin{lstlisting}[style=vsnip]
+// adda.v 块 7/8
+k_flag<=1'b1;   // 置 1
+// c_flag<=1'b0;  // 被注释：永不清零
+
+// eso.v 块 2
+if(c_flag==1'b1)      c<=c_date;
+else if(k_flag==1'b1) k<=k_date;
+\end{lstlisting}
+
+时序上：若上位机先发 A 帧，\sig{c_flag} 变 1 并保持；之后发 B 帧，\sig{k_flag}=1，
+但 \sig{else if} 分支永远进不去。只有在\textbf{从未收到 A 帧}的情况下 k 才能更新。
+修复示例：
+
+\begin{lstlisting}[style=vsnip]
+// 方案一：标志脉冲化(顶层)
+else if((rx_date[15:12]==4'hB)&&(po_flag3==1'b1))
+    begin
+        led6<=~led6;
+        k_flag<=1'b1;      // 只在解析当拍为 1
+        k_date<=rx_date[11:0];
+    end
+else
+    k_flag<=1'b0;          // 下一拍自动清 0
+
+// 方案二：ESO 内改为并行 if
+if(c_flag) c<=c_date;
+if(k_flag) k<=k_date;
+\end{lstlisting}
+
+\subsubsection{P2：符号项的位宽陷阱}
+
+\sig{assign sgn = (she>0) ? 1'd1 : 4'b1111;} 中，\sig{4'b1111} 是\textbf{无符号}常量，
+赋给 5bit 有符号寄存器时按“补零”扩展为 \sig{5'b01111}=+15。正确写法：
+
+\begin{lstlisting}[style=vsnip]
+assign sgn = (she > 0) ? 5'sd1 : -5'sd1;
+\end{lstlisting}
+
+\subsubsection{P4：BCD 位宽不足}
+
+详见第 10 章的转换实例：$1023$ 的最终 BCD 结果是 0x023。修复需要把
+\sig{data_shift} 扩到 26bit、增加第 4 组“加 3”判断与 \sig{thou} 输出，
+并把 \sig{seg} 的 \sig{data_reg} 扩到 5 个 nibble。
+
+\subsection{工程性改进建议}
+
+\begin{enumerate}[leftmargin=2em,itemsep=3pt]
+  \item \textbf{补时序约束}：当前工程没有 \sig{.sdc}（Timing Constraints File 为 “---”），
+        50MHz 主时钟没有任何 \sig{create_clock}。建议至少加
+        \sig{create_clock -name sys_clk -period 20 -waveform {0 10} [get_ports sys_clk]}，
+        并为 \sig{ad_clk1} 加生成时钟约束；
+  \item \textbf{复位处理}：异步复位、异步释放存在恢复/移除时间风险，建议加“复位同步器”
+        （两级触发器同步释放）；
+  \item \textbf{时钟域}：ESO 用 1kHz 分频时钟，属“派生时钟”用法。建议改为
+        \sig{sys_clk} + 时钟使能（每 50000 拍使能一次），可避免时钟树布线与时序分析问题；
+  \item \textbf{参数集中}：把 \sig{50_000_000}、\sig{115200}、分频比等提到一个
+        \file{define.vh} 或用参数传递，避免三处手工同步；
+  \item \textbf{串口协议}：建议加帧头/校验（如 0xAA55 + 累加和），并给上位机一份
+        字节序说明；
+  \item \textbf{文档与工程一致性}：把未例化的 IP 从工程移除，或建一个“参考”文件夹，
+        避免后人误以为 PLL/FIFO 参与工作。
+\end{enumerate}
+
+\subsection{上板验证清单}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{5.4cm}p{3.4cm}p{4.4cm}}
+\toprule
+验证项 & 现象 & 判据\\
+\midrule
+时钟与复位 & led7 初始为 1 & 复位释放后 LED 常亮/常灭一致\\
+数码管显示 & 显示 3 位十进制 & 与输入码值对应（$\ge$1000 会回绕）\\
+按键切换 & 按一次 LED0 变一次 & \sig{ad_out} 在直通/控制量之间切换\\
+串口上报 & 每 182$\mu$s 一帧 & 115200 8N1，16bit 小端\\
+串口调参 & 发 A/B 帧 & LED7/LED6 翻转；注意 P1 的 k 失效问题\\
+DA 输出 & 示波器看 \sig{ad_out} & 直通模式下与 AD 输入反相\\
+\bottomrule
+\end{tabular}
+\end{table}

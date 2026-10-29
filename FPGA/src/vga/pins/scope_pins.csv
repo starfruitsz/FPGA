@@ -1,0 +1,49 @@
+# ==============================================================================
+# VGA 示波器 / AD-DA 工程引脚表（IO 列表配置文件）
+#
+# 用法: 改这张表 -> 运行 pins/gen_cst.py -> 生成完整 .cst 约束
+#      后续换板、换引脚只改这里，RTL 不需要动。
+#
+# 列: 端口名, 引脚, 方向(out/in/inout), 驱动mA(输入填 0), 上下拉, Bank电压, 说明
+# 说明: 端口名按 Verilog 端口逐位写，如 ad_date[0]；标 * 的行是示例引脚，
+#       必须按你板卡的原理图/引脚手册修改。
+# ==============================================================================
+sys_clk,T9,in,0,NONE,3.3,50MHz 晶振
+sys_rst_n,A15,in,0,NONE,3.3,复位按键 低有效
+ad_date[0],H17,in,0,NONE,3.3,ADC D0
+ad_date[1],F17,in,0,NONE,3.3,ADC D1
+ad_date[2],L12,in,0,NONE,3.3,ADC D2
+ad_date[3],G16,in,0,NONE,3.3,ADC D3
+ad_date[4],K12,in,0,NONE,3.3,ADC D4
+ad_date[5],D17,in,0,NONE,3.3,ADC D5
+ad_date[6],J13,in,0,NONE,3.3,ADC D6
+ad_date[7],F14,in,0,NONE,3.3,ADC D7
+ad_date[8],K15,in,0,NONE,3.3,ADC D8
+ad_date[9],C17,in,0,NONE,3.3,ADC D9
+key_in,B16,in,0,NONE,3.3,用户按键
+rx,P18,in,0,NONE,3.3,串口接收
+ad_clk1,H18,out,8,NONE,3.3,AD 转换时钟
+da_clk1,H13,out,8,NONE,3.3,DA 转换时钟
+ad_out[0],C18,out,8,NONE,3.3,DAC D0
+ad_out[1],H14,out,8,NONE,3.3,DAC D1
+ad_out[2],G14,out,8,NONE,3.3,DAC D2
+ad_out[3],K16,out,8,NONE,3.3,DAC D3
+ad_out[4],D18,out,8,NONE,3.3,DAC D4
+ad_out[5],K14,out,8,NONE,3.3,DAC D5
+ad_out[6],G18,out,8,NONE,3.3,DAC D6
+ad_out[7],K13,out,8,NONE,3.3,DAC D7
+ad_out[8],F18,out,8,NONE,3.3,DAC D8
+ad_out[9],L13,out,8,NONE,3.3,DAC D9
+tx,N18,out,8,NONE,3.3,串口发送
+led0,D14,out,8,NONE,3.3,状态灯
+led6,C14,out,8,NONE,3.3,B 帧指示
+led7,B9,out,8,NONE,3.3,A 帧指示
+# ---- 以下为 VGA 接口（* 示例引脚，按板卡实际可用 IO 修改）----
+vga_hs,T15,out,8,NONE,3.3,*VGA HSYNC
+vga_vs,T14,out,8,NONE,3.3,*VGA VSYNC
+vga_rgb[11],R16,out,8,NONE,3.3,*R1 -> 270R
+vga_rgb[10],R15,out,8,NONE,3.3,*R0 -> 560R
+vga_rgb[7],U14,out,8,NONE,3.3,*G1 -> 270R
+vga_rgb[6],U13,out,8,NONE,3.3,*G0 -> 560R
+vga_rgb[3],V17,out,8,NONE,3.3,*B1 -> 270R
+vga_rgb[2],V14,out,8,NONE,3.3,*B0 -> 560R
