@@ -57,7 +57,8 @@ module adc_top #(
         .csr_rdata(csr_rdata),
         .status_locked(b_locked), .status_error(b_error),
         .enable(enable), .rate(rate), .gain(gain), .offset(offset),
-        .ch_en(ch_en), .fmt_align(fmt_align), .fmt_signed(fmt_signed)
+        .ch_en(ch_en), .fmt_align(fmt_align), .fmt_signed(fmt_signed),
+        .sdiv(), .os_sel(), .range_sel()
     );
 
     generate

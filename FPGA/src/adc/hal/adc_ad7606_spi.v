@@ -13,7 +13,6 @@
 
 module adc_ad7606_spi #(
     parameter integer RW        = 16,
-    parameter integer SPI_DIV   = 4,     // SCLK 半周期(clk 数)
     parameter integer CONV_CYC  = 8,     // CONVST 高电平宽度(clk 数)
     parameter integer RST_CYC   = 200    // RESET 高电平宽度(clk 数)
 )(
@@ -21,6 +20,9 @@ module adc_ad7606_spi #(
     input  wire          rst,
     input  wire          enable,
     input  wire [15:0]   rate,        // 两次转换之间的 clk 数(0=连续)
+    input  wire [15:0]   sdiv,        // SCLK 半周期(clk 数)，运行时可配
+    input  wire [2:0]    os_sel,      // 过采样配置
+    input  wire          range_sel,   // 1=±10V 0=±5V
     // AD7606 物理引脚
     output reg           convst,      // CONVST A + B
     output reg           cs_n,
@@ -76,8 +78,8 @@ module adc_ad7606_spi #(
             sclk      <= 1'b1;
             adc_reset <= 1'b1;
             ser       <= 1'b1;     // 串行模式
-            os        <= 3'd0;     // 不过采样
-            range     <= 1'b1;     // ±10V(悬空默认)
+            os        <= 3'd0;     // 由 os_sel 运行时覆盖
+            range     <= 1'b1;     // 由 range_sel 运行时覆盖
             stby      <= 1'b1;     // 正常
             r_data    <= {RW{1'b0}};
             r_ch      <= 2'd0;
@@ -86,7 +88,9 @@ module adc_ad7606_spi #(
             error     <= 1'b0;
         end
         else begin
-            r_valid <= 1'b0;
+            r_valid   <= 1'b0;
+            os        <= os_sel;
+            range     <= range_sel;
 
             case (state)
                 // 上电复位：RESET 保持 RST_CYC 个 clk
@@ -156,7 +160,7 @@ module adc_ad7606_spi #(
 
                 // 64 个 SCLK：下降沿输出，上升沿采样
                 S_READ: begin
-                    if (sclk_cnt == SPI_DIV - 1) begin
+                    if (sclk_cnt == ((sdiv == 16'd0) ? 16'd1 : sdiv) - 1) begin
                         sclk_cnt <= 16'd0;
                         sclk     <= ~sclk;
                         if (sclk == 1'b0) begin

@@ -134,3 +134,12 @@ S5 仿真 + TD + 第 19 章
 - 新增 src/adc/adc_ad7606_top.v：CSR + 驱动 + 归一化（补码→偏移二进制→取高 10 位）；
 - adc_norm 增加 SIGNED 参数（补码转偏移二进制）；
 - 引脚建议见 doc/SparkRoad-V_pinmap.md 第 8 节（待确认接线后写约束）。
+
+### 9.1 可配置项
+
+- 引脚：FPGA/src/adc/pins/board_pins.csv + tools/gen_adc_pins.py -> SparkRoad.adc
+- 量程：CSR 0x20（1=±10V）
+- 过采样：CSR 0x24
+- SCLK 半周期：CSR 0x28（运行时可改）
+- 默认值：adc_ad7606_top 参数 SDIV_DEF/OS_DEF/RANGE_DEF/RES
+- 采样率：CSR 0x08 RATE

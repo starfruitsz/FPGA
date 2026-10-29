@@ -14,11 +14,14 @@
 `timescale 1ns / 1ps
 
 module adc_cfg #(
-    parameter integer IMPL  = 1,
-    parameter integer RES   = 12,
-    parameter integer ALIGN = 1,
-    parameter integer CH    = 1,
-    parameter integer DW    = 16
+    parameter integer IMPL   = 1,
+    parameter integer RES    = 12,
+    parameter integer ALIGN  = 1,
+    parameter integer CH     = 1,
+    parameter integer DW     = 16,
+    parameter integer SDIV_DEF  = 4,     // 默认 SCLK 半周期
+    parameter integer OS_DEF    = 0,     // 默认过采样
+    parameter integer RANGE_DEF = 1      // 默认 1=±10V 0=±5V
 )(
     input  wire        clk,
     input  wire        rst,
@@ -34,7 +37,10 @@ module adc_cfg #(
     output reg  [15:0] offset,
     output reg  [3:0]  ch_en,
     output reg         fmt_align,
-    output reg         fmt_signed
+    output reg         fmt_signed,
+    output reg  [15:0] sdiv,
+    output reg  [2:0]  os_sel,
+    output reg         range_sel
 );
     always @(*) begin
         case (csr_addr)
@@ -46,6 +52,9 @@ module adc_cfg #(
             8'h14: csr_rdata = {30'd0, status_error, status_locked};
             8'h18: csr_rdata = {28'd0, ch_en};
             8'h1C: csr_rdata = {30'd0, fmt_signed, fmt_align};
+            8'h20: csr_rdata = {31'd0, range_sel};
+            8'h24: csr_rdata = {29'd0, os_sel};
+            8'h28: csr_rdata = {16'd0, sdiv};
             default: csr_rdata = 32'd0;
         endcase
     end
@@ -59,6 +68,9 @@ module adc_cfg #(
             ch_en  <= 4'h1;
             fmt_align  <= ALIGN[0];
             fmt_signed <= 1'b0;
+            sdiv       <= SDIV_DEF[15:0];
+            os_sel     <= OS_DEF[2:0];
+            range_sel  <= RANGE_DEF[0];
         end
         else if (csr_we) begin
             case (csr_addr)
@@ -68,6 +80,9 @@ module adc_cfg #(
                 8'h10: offset <= csr_wdata[15:0];
                 8'h18: ch_en  <= csr_wdata[3:0];
                 8'h1C: begin fmt_align <= csr_wdata[0]; fmt_signed <= csr_wdata[1]; end
+                8'h20: range_sel <= csr_wdata[0];
+                8'h24: os_sel    <= csr_wdata[2:0];
+                8'h28: sdiv      <= csr_wdata[15:0];
                 default: ;
             endcase
         end
