@@ -195,7 +195,8 @@ module vga_scope_top #(
     generate
         if (FEAT_MEAS != 0) begin : g_meas
             scope_meas u_meas (
-                .clk(clk), .rst(rst), .din(ch0_in), .tick(we0),   // 用采样节拍统计(不是系统时钟), .frame(frame),
+                .clk(clk), .rst(rst), .din(ch0_in), .tick(we0),   // 用采样节拍统计
+                .frame(frame),
                 .vpp(vpp), .vmax(vmax), .vmin(vmin), .vmean(vmean),
                 .freq(freq), .period(period), .duty(duty)
             );
