@@ -47,6 +47,16 @@
   渲染数学用 Python 复现并出图（`preview_640x480.png`）。
 
 
+
+**工程接入状态**：14 个 VGA 源文件已加入 Gowin 工程
+（`FPGA/project_2025_11_07.gprj` 的 FileList 由 12 条变为 26 条）；
+TD 容器工程 `FPGA_TD/project_2025_11_07_TD.al` 已收录 25 个源文件、
+Top 设为 `adda_scope_top`，并已重新打开验证（层次树顶层为 adda_scope_top，4 个子模块）。
+Gowin GUI 中还需右键 `adda_scope_top` → "Set as Top Module"（.gprj 不保存 Top 设置），
+VGA 的 8 个引脚仍待按板卡原理图填入 CSV。
+
+![TD 重新打开后的工程](TD_scope_project.jpg)
+
 ## 2. 三步任务完成情况
 
 ### 2.1 用 TD 打开工程
