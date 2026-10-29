@@ -16,6 +16,20 @@
         <File path="src/seg.v" type="file.verilog" enable="1"/>
         <File path="src/uart_rx.v" type="file.verilog" enable="1"/>
         <File path="src/uart_tx.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/hal/vga_timing.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/hal/vram_sdp.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/hal/font_rom.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/abs/grid_layer.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/abs/trace_layer.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/abs/text_layer.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/abs/compositor.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/app/scope_capture.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/app/scope_ui.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/app/scope_app.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/app/scope_meas.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/app/scope_cmd.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/vga_scope_top.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/adda_scope_top.v" type="file.verilog" enable="1"/>
         <File path="src/project_2025_11_07.cst" type="file.cst" enable="1"/>
     </FileList>
 </Project>

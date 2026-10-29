@@ -1,0 +1,20 @@
+FileSet "DESIGN_DEFAULT"
+{
+    Verilog
+    {
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/hal/vga_timing.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/hal/vram_sdp.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/hal/font_rom.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/abs/grid_layer.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/abs/trace_layer.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/abs/text_layer.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/abs/compositor.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/app/scope_capture.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/app/scope_ui.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/app/scope_app.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/app/scope_meas.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/app/scope_cmd.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/vga_scope_top.v
+        C:/Users/Administrator/Desktop/task/FPGA/src/vga/adda_scope_top.v
+    }
+}
