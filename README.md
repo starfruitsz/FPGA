@@ -16,8 +16,8 @@
 | 建立工程脚本 | `FPGA_TD/make_prj.tcl` | 可重复执行，重建容器工程 |
 | 注释后源码 | `FPGA/src/**` | 17 个文件，仅新增 `//` 注释 |
 | 原始源码备份 | `FPGA/src_original_backup/**` | 注释前的逐字节副本 |
-| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 17 章（ch01–ch17）+ main/style/appendix |
-| 最终 PDF | `FPGA_project_analysis.pdf`（120 页） | 与 `doc/main.pdf` 相同；第 17 章描述修复分支 |
+| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 18 章（ch01–ch18）+ main/style/appendix |
+| 最终 PDF | `FPGA_project_analysis.pdf`（123 页） | 与 `doc/main.pdf` 相同；第 17 章修复记录、第 18 章示波器 v2 |
 | TD 打开截图 | `TD_open_project.jpg` | 层次树已识别 adda(7)/Gowin_PLL(1)/fifo_top(4) |
 | **VGA 示波器（分层）** | `FPGA/src/vga/**` | HAL/抽象/应用三层，引脚表与时基可配 |
 | VGA 屏幕预览 | `FPGA/src/vga/preview_640x480.png` | 用 Python 复现渲染结果的效果图 |

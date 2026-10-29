@@ -94,7 +94,6 @@ module adda_scope_top #(
         .ad_clk   (ad_clk),   // P9 已回撤：保留端口(本设计未使用)
         .da_clk   (da_clk),
         .rx       (rx),
-        .rx       (rx),
         .ad_clk1  (ad_clk1),
         .da_clk1  (da_clk1),
         .ad_out   (ad_out),
@@ -131,6 +130,11 @@ module adda_scope_top #(
     wire [15:0] c_tb;
     wire        c_run, c_ten, c_edg, c_scr;
     wire [9:0]  c_lvl;
+    wire        c_tmode_we, c_tsrc_we, c_pre_we, c_hold_we;
+    wire [1:0]  c_tmode;
+    wire        c_tsrc;
+    wire [9:0]  c_pre;
+    wire [15:0] c_hold;
 
 //------------------------------------------------------------------
 // [APP] 把字节流解析成“写使能 + 数值”，送给 vga_scope_top 的 cfg_* 端口。
@@ -151,7 +155,15 @@ module adda_scope_top #(
         .edg_we  (c_edg_we),
         .edg_val (c_edg),
         .scr_we  (c_scr_we),
-        .scr_val (c_scr)
+        .scr_val (c_scr),
+        .tmode_we(c_tmode_we),
+        .tmode_val(c_tmode),
+        .tsrc_we (c_tsrc_we),
+        .tsrc_val(c_tsrc),
+        .pre_we  (c_pre_we),
+        .pre_val (c_pre),
+        .hold_we (c_hold_we),
+        .hold_val(c_hold)
     );
 
     //------------------------------------------------------------------
@@ -199,6 +211,14 @@ module adda_scope_top #(
                 .cfg_edg   (c_edg),
                 .cfg_scr_we(c_scr_we),
                 .cfg_scr   (c_scr),
+                .cfg_tmode_we(c_tmode_we),
+                .cfg_tmode (c_tmode),
+                .cfg_tsrc_we(c_tsrc_we),
+                .cfg_tsrc  (c_tsrc),
+                .cfg_pre_we(c_pre_we),
+                .cfg_pre   (c_pre),
+                .cfg_hold_we(c_hold_we),
+                .cfg_hold  (c_hold),
                 .vga_rgb   (vga_rgb),
                 .vga_hs    (vga_hs),
                 .vga_vs    (vga_vs),

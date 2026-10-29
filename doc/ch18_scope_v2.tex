@@ -1,0 +1,155 @@
+% =====================================================================
+%  ch18_scope_v2.tex -- 第 18 章 示波器应用层增强（v2）
+% =====================================================================
+\section{示波器应用层增强（v2）}
+
+本章记录 \file{fix/review-p1-p11} 分支上的第二次功能升级：在不改动 HAL/ABS 封装的前提下，
+把采集层升级为带触发状态机的结构，并扩展测量与文本显示。对应提交见仓库
+\url{https://github.com/starfruitsz/FPGA} 的 \file{fix/review-p1-p11} 分支。
+
+\section{设计目标}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 触发从“单一边沿 + 指针归零”升级为 \textbf{状态机 + 模式 + 预触发 + 保持时间}；
+  \item 测量从“Vpp/频率”扩展到 \textbf{最大/最小/均值/周期/占空比}；
+  \item 文本层从固定 5 字段升级为 \textbf{双页轮显}；
+  \item 增加 \textbf{PC 上位机 MVP} 与 \textbf{MIT 许可}；
+  \item 所有改动只落在 APP 层与顶层，HAL/ABS 接口保持不变（除文本层新增 \sig{page} 端口）。
+\end{enumerate}
+
+\section{触发状态机}
+
+采集层（\file{scope_capture.v}）内部改为 4 状态机：
+
+\begin{center}
+\small
+\begin{tabular}{cll}
+\toprule
+状态 & 名称 & 行为\\
+\midrule
+\sig{2'd0} & IDLE & 等待 \sig{arm}，不写 RAM\\
+\sig{2'd1} & ARMED & 自由写入循环缓冲，等待触发条件\\
+\sig{2'd2} & FILL & 已触发，继续写满一屏（\sig{1<<DEPTH_LOG2} 个点）\\
+\sig{2'd3} & DONE & 停止写入，等待下一次 \sig{arm}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{触发模式}
+
+\begin{center}
+\small
+\begin{tabular}{clp{6.6cm}}
+\toprule
+\sig{trig_mode} & 名称 & 行为\\
+\midrule
+\sig{2'd0} & auto & 自由滚动显示；触发只更新对齐基准 \sig{rd_base}，不停机\\
+\sig{2'd1} & normal & 触发后填满一屏进入 DONE；APP 检测到 \sig{done} 自动重新 \sig{arm}，连续刷新\\
+\sig{2'd2} & single & 触发一次后停在 DONE，必须按键或串口 \sig{arm} 才继续\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{预触发与保持时间}
+
+触发命中时锁存显示基准：
+
+\begin{lstlisting}[style=vsnip]
+rd_base <= waddr - pre_trig;   // 显示起点前移，屏幕上可见触发点之前的波形
+hold_cnt <= holdoff;           // 之后 holdoff 个采样点内忽略新触发
+\end{lstlisting}
+
+显示读地址 = \sig{rd_base + px}。由于缓冲区是循环写入的，\sig{rd_base} 之前的地址里
+正好是触发前的历史采样，因此不需要额外的“预触发存储”。
+
+\section{扩展测量}
+
+\file{scope_meas.v} 在每帧内并行统计：
+
+\begin{center}
+\small
+\begin{tabular}{llp{6.2cm}}
+\toprule
+输出 & 位宽 & 计算方式\\
+\midrule
+\sig{vpp} & 10 & 帧内 \sig{vmax} $-$ \sig{vmin}\\
+\sig{vmax}/\sig{vmin} & 10 & 采样比较器\\
+\sig{vmean} & 10 & 前 256 点累加和右移 8 位（避免除法器）\\
+\sig{period} & 16 & 相邻上升穿越之间的采样点数\\
+\sig{freq} & 16 & 帧内上升穿越次数 $\times 60$（帧频约 60Hz）\\
+\sig{duty} & 8 & 前 256 点中高于阈值的比例（0$\sim$100）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+RMS 需要开方，本版未实现；后续可用 CORDIC 或查表。
+
+\section{双页文本}
+
+文本层新增 \sig{page} 输入，模板变为两页（列位置两页一致）：
+
+\begin{center}
+\small
+\begin{tabular}{cll}
+\toprule
+页 & 第 0 行 & 第 1 行\\
+\midrule
+0 & \sig{AD=####  U=####  TB=####} & \sig{VP=####  FR=####}\\
+1 & \sig{HI=#### LO=####  AV=####} & \sig{PE=#### DU=####}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\sig{page} 由 APP 每 2 秒翻转一次，顶层按页把不同的值接到 \sig{val0..val4}。
+
+\section{串口协议}
+
+新增 4 条命令（原有 T/R/A/L/E/S 不变），格式仍为 \sig{<字母><十六进制><CR/LF>}：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+命令 & 含义 & 取值范围\\
+\midrule
+\sig{M<hex>} & 触发模式 & 0=auto 1=normal 2=single\\
+\sig{C<hex>} & 触发源 & 0=CH0 1=CH1\\
+\sig{P<hex>} & 预触发点数 & 0$\sim$3FF\\
+\sig{H<hex>} & 保持时间 & 0$\sim$FFFF 采样点\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{上位机 MVP}
+
+\file{tools/scope_host.py}：
+
+\begin{lstlisting}[style=vsnip]
+python scope_host.py --port COM3 --baud 115200        # 实时波形
+python scope_host.py --port COM3 --csv cap.csv        # 存 CSV
+\end{lstlisting}
+
+按“先低字节、后高字节”还原 10bit 码值（\sig{lo | ((hi & 3) << 8)}），用 matplotlib 滚动显示。
+
+\section{验证与限制}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项 & 结果\\
+\midrule
+TD 前端分析 & 27 个文件通过\\
+端口连接检查 & 25 模块 / 31 例化 / 0 错误\\
+仿真 & 未做\\
+上板 & 未做（需实测状态机与预触发偏移）\\
+ETS 等效采样 & 未实现（需 PLL 相位或延时链）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}
+本版改动集中在 \file{scope_capture.v}、\file{scope_meas.v}、\file{scope_app.v}、
+\file{scope_cmd.v}、\file{text_layer.v} 与 \file{vga_scope_top.v}；
+上板前建议先把 \sig{FEAT_TRIG} 置 0 验证显示通路，再打开触发逐项试验。
+\end{warnbox}

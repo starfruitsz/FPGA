@@ -113,3 +113,70 @@ module adda_scope_top #(
 | 高速上报：每 5ms 一帧 | `UART_MODE=1, REPORT_MS=5` |
 | 低速上报：每 200ms 一帧 | `UART_MODE=1, REPORT_MS=200` |
 | 连续发送（旧行为） | `UART_MODE=0` |
+
+
+---
+
+## 7. v2 应用层增强（P13）
+
+在保持 HAL/ABS 封装不变的前提下，只改 APP 与顶层，加入：
+
+### 7.1 触发状态机
+
+```
+IDLE --arm--> ARMED --触发--> FILL --采满一屏--> DONE
+                 ^                                |
+                 |------ arm (normal 自动 / single 手动)
+```
+
+- `trig_mode`：0=auto（自由滚动，仅用触发对齐）、1=normal（采满一屏停住，自动重触发）、2=single（停住，等按键/串口 arm）
+- `pre_trig`：触发时锁存 `rd_base = 写指针 - pre_trig`，显示从 `rd_base` 开始，能看到触发点之前的波形
+- `holdoff`：触发后保持 N 个采样点内的新触发被忽略（消抖/防重触发）
+- `trig_src`：触发源可选 CH0/CH1，与显示通道解耦
+
+### 7.2 扩展测量（scope_meas v2）
+
+| 输出 | 含义 | 实现 |
+|---|---|---|
+| vpp | 峰峰值 | max-min（每帧） |
+| vmax / vmin | 本帧最大/最小 | 比较器 |
+| vmean | 均值 | 前 256 点累加后右移 8 位（无除法器） |
+| period | 周期 | 相邻上升沿之间的采样点数 |
+| freq | 频率 | 帧内上升沿次数 × 60Hz |
+| duty | 占空比 | 前 256 点中高于阈值的比例 |
+
+RMS 需要开方，本版未实现（可后续用 CORDIC/查表）。
+
+### 7.3 双页文本
+
+`page` 每 2 秒翻转：
+
+- page=0：`AD / U / TB / VP / FR`
+- page=1：`HI / LO / AV / PE / DU`（最大/最小/均值/周期/占空比）
+
+### 7.4 串口命令（新增）
+
+| 命令 | 含义 | 范围 |
+|---|---|---|
+| `M<hex>` | 触发模式 | 0=auto 1=normal 2=single |
+| `C<hex>` | 触发源 | 0=CH0 1=CH1 |
+| `P<hex>` | 预触发点数 | 0~3FF |
+| `H<hex>` | 保持时间 | 0~FFFF 采样点 |
+
+原有 T/R/A/L/E/S 不变。
+
+### 7.5 上位机 MVP
+
+`tools/scope_host.py`：pyserial 读取 2 字节帧（先低后高），matplotlib 实时滚动显示，可存 CSV。
+
+### 7.6 许可
+
+- 仓库新增 MIT `LICENSE`；
+- `THIRD_PARTY.md` 记录参考项目（AtomGit/MIT、UMD 教程、sigrok/ngscopeclient/ScopeFun 仅参考设计，未复制 GPL 代码）。
+
+### 7.7 验证与限制
+
+- TD 前端分析：27 个文件通过；端口检查：25 模块 / 31 例化 / 0 错误；
+- **未做仿真、未上板**：状态机与预触发偏移的实际波形需要实测；
+- ETS（等效采样）未实现，需要 PLL 相位或延时链；
+- 频率/周期统计基于采样节拍，低采样率下分辨率有限。

@@ -1,148 +1,171 @@
 //==============================================================================
-// 层: 应用(配置)  文件: app/scope_app.v
-// 功能: 运行时可配置项 + 按键交互 + 串口配置入口
-//   - 时基: 8 档预设(短按切换)；也可由 ext_tb_we/ext_tb 直接写入
-//   - 运行/冻结: 长按切换；也可由 ext_run_we 写入
-//   - 触发(特性1): 使能/电平/边沿，可由串口配置
-//   - 滚动(特性3): 使能，可由串口配置
-//   - arm: 单周期脉冲，重新开始采集
-// 优先级: 同一拍内串口写入优先于按键(按键先执行，串口后覆盖)
+// 层: 应用(配置)  文件: app/scope_app.v   [v2: 触发寄存器 + 会话状态 + 测量翻页]
+// 功能:
+//   1) 寄存器: 时基 tb_div、触发使能/模式/源/电平/边沿、预触发、保持时间、滚动
+//   2) 会话状态: 0=STOP 1=IDLE 2=ARMED/FILL 3=DONE（供文本层显示）
+//   3) 翻页: page 每 2 秒翻转，文本层据此切换测量显示页
+//   4) 重触发: normal 模式捕获完成(cap_done)后自动 arm；single 等外部 arm
+//   5) 串口下发的写优先于按键
 //==============================================================================
 `timescale 1ns / 1ps
 
-//
-// ============================ 怎么读这个文件 ============================
-// 这个模块可以理解成“设置面板”：它保存所有可调参数，并决定谁来改。
-//   输入：按键事件(短按/长按) + 串口下发的 6 组写使能/数值
-//   输出：采样分频 tb_div、运行 run、触发设置、滚动开关、arm(重新采集)
-// 规则：同一拍里按键先执行、串口后执行，所以“串口优先”。
-// arm 是一个只维持 1 拍的脉冲，用来通知采集引擎“从头开始”。
-// ======================================================================
 module scope_app (
     input  wire        clk,
     input  wire        rst,
     input  wire        key_in,
 
-    // ---- 串口下发(特性4) ----
-    input  wire        ext_tb_we,
-    input  wire [15:0] ext_tb,
-    input  wire        ext_run_we,
-    input  wire        ext_run,
-    input  wire        ext_ten_we,
-    input  wire        ext_ten,
-    input  wire        ext_lvl_we,
-    input  wire [9:0]  ext_lvl,
-    input  wire        ext_edg_we,
-    input  wire        ext_edg,
-    input  wire        ext_scr_we,
-    input  wire        ext_scr,
+    // ---- 串口下发 ----
+    input  wire        ext_tb_we,    input wire [15:0] ext_tb,
+    input  wire        ext_run_we,   input wire        ext_run,
+    input  wire        ext_ten_we,   input wire        ext_ten,
+    input  wire        ext_lvl_we,   input wire [9:0]  ext_lvl,
+    input  wire        ext_edg_we,   input wire        ext_edg,
+    input  wire        ext_scr_we,   input wire        ext_scr,
+    input  wire        ext_tmode_we, input wire [1:0]  ext_tmode,
+    input  wire        ext_tsrc_we,  input wire        ext_tsrc,
+    input  wire        ext_pre_we,   input wire [9:0]  ext_pre,
+    input  wire        ext_hold_we,  input wire [15:0] ext_hold,
 
+    // ---- 采集状态反馈 ----
+    input  wire        cap_done,
+    input  wire [1:0]  cap_state,
+
+    // ---- 输出 ----
     output reg  [15:0] tb_div,
     output reg         run,
     output reg         arm,
     output reg         trig_en,
+    output reg  [1:0]  trig_mode,
+    output reg         trig_src,      // 0=CH0 1=CH1
     output reg  [9:0]  trig_level,
     output reg         trig_edge,
+    output reg  [9:0]  pre_trig,
+    output reg  [15:0] holdoff,
     output reg         scroll_en,
     output reg  [2:0]  tb_idx,
+    output reg         page,          // 0=时域页 1=测量页
+    output wire [2:0]  state_o,
     output wire        ev_short_o,
     output wire        ev_long_o
 );
 
-    wire ev_short;
-    wire ev_long;
+    wire ev_short, ev_long;
 
     assign ev_short_o = ev_short;
     assign ev_long_o  = ev_long;
 
+    //------------------------------------------------------------------
+    // 按键去抖（复用已有模块）
+    //------------------------------------------------------------------
     scope_ui #(
         .CLK_HZ (50_000_000),
         .DB_MS  (20),
         .LONG_MS(800)
     ) u_ui (
-        .clk     (clk),
-        .rst     (rst),
-        .key_in  (key_in),
-        .ev_short(ev_short),
-        .ev_long (ev_long)
+        .clk(clk), .rst(rst), .key_in(key_in),
+        .ev_short(ev_short), .ev_long(ev_long)
     );
 
-    // 时基档位 -> 分频值
-//------------------------------------------------------------------
-// nidx：短按后要切换到的“下一档”。到第 6 档就回到 0，形成 8 档循环。
-// 3 位二进制正好 0..7，所以用 3'd6 判断最大值。
-//------------------------------------------------------------------
+    //------------------------------------------------------------------
+    // 时基档位表
+    //------------------------------------------------------------------
     wire [2:0] nidx = (tb_idx == 3'd6) ? 3'd0 : (tb_idx + 3'd1);
 
     reg [15:0] tb_next;
-//------------------------------------------------------------------
-// [时基表] 把“档位”翻译成“分频值”。分频值 = 采样周期 - 1。
-//   50MHz / (49999+1) = 1kHz 采样率；rate_div=0 时每个时钟采一点(50MS/s)。
-// 换主频时只需要改这张表，其它逻辑不变。
-//------------------------------------------------------------------
     always @(*) begin
         case (nidx)
-            3'd0: tb_next = 16'd49999;   // 1 kS/s
-            3'd1: tb_next = 16'd9999;    // 5 kS/s
-            3'd2: tb_next = 16'd1999;    // 25 kS/s
-            3'd3: tb_next = 16'd499;     // 100 kS/s
-            3'd4: tb_next = 16'd99;      // 500 kS/s
-            3'd5: tb_next = 16'd9;       // 5 MS/s
-            3'd6: tb_next = 16'd0;       // 50 MS/s
+            3'd0: tb_next = 16'd49999;
+            3'd1: tb_next = 16'd9999;
+            3'd2: tb_next = 16'd1999;
+            3'd3: tb_next = 16'd499;
+            3'd4: tb_next = 16'd99;
+            3'd5: tb_next = 16'd9;
+            3'd6: tb_next = 16'd0;
             default: tb_next = 16'd49999;
         endcase
     end
 
-//------------------------------------------------------------------
-// 主寄存器块。注意三个细节：
-// 1) arm 每拍默认清 0，再在按键/串口分支里置 1 —— 这样它天然是单拍脉冲；
-// 2) 短按换档时也发 arm，让波形从新起点开始画；
-// 3) 串口分支放在按键分支后面，同一拍会覆盖按键的结果（后写优先）。
-//------------------------------------------------------------------
+    //------------------------------------------------------------------
+    // 翻页计数：每 2 秒翻转一次(50MHz x 2s = 100,000,000)
+    //------------------------------------------------------------------
+    reg [26:0] page_cnt;
+    always @(posedge clk) begin
+        if (rst) begin
+            page_cnt <= 27'd0;
+            page     <= 1'b0;
+        end
+        else if (page_cnt == 27'd99_999_999) begin
+            page_cnt <= 27'd0;
+            page     <= ~page;
+        end
+        else begin
+            page_cnt <= page_cnt + 27'd1;
+        end
+    end
+
+    //------------------------------------------------------------------
+    // 主寄存器块
+    //------------------------------------------------------------------
+
+    // 上电后自动 arm 一次，避免一直停在 IDLE 不采集
+    reg boot;
+    always @(posedge clk)
+        if (rst) boot <= 1'b0;
+        else     boot <= 1'b1;
     always @(posedge clk) begin
         if (rst) begin
             tb_idx     <= 3'd0;
             tb_div     <= 16'd49999;
             run        <= 1'b1;
             arm        <= 1'b0;
-            trig_en    <= 1'b0;      // 特性1 默认关闭，可用串口 "A1" 打开
+            trig_en    <= 1'b0;
+            trig_mode  <= 2'd0;      // 默认自动
+            trig_src   <= 1'b0;      // 默认 CH0
             trig_level <= 10'd512;
             trig_edge  <= 1'b0;
-            scroll_en  <= 1'b0;      // 特性3 默认关闭，可用串口 "S1" 打开
+            pre_trig   <= 10'd0;
+            holdoff    <= 16'd0;
+            scroll_en  <= 1'b0;
         end
         else begin
             arm <= 1'b0;
+            if (!boot) arm <= 1'b1;   // 上电自动采集一次
 
             // ---- 按键 ----
-//------------------------------------------------------------------
-// [短按] 换下一档时基，并重新开始一次采集(arm)。
-// 这样换档后画面不会残留上一档的数据。
-//------------------------------------------------------------------
-            if (ev_short) begin                 // 短按: 下一档时基
+            if (ev_short) begin
                 tb_idx <= nidx;
                 tb_div <= tb_next;
                 arm    <= 1'b1;
             end
-//------------------------------------------------------------------
-// [长按] 运行/冻结切换。冻结时采集引擎停止写入，画面停在当前波形。
-//------------------------------------------------------------------
-            if (ev_long) begin                  // 长按: 冻结/运行
+            if (ev_long) begin
                 run <= ~run;
                 arm <= 1'b1;
             end
 
-            // ---- 串口(后写，优先级更高) ----
-//------------------------------------------------------------------
-// [串口写入] 每条命令都对应一个 we 脉冲 + 数值；收到就更新寄存器。
-// 改时基/运行/触发使能时也顺手发一个 arm，避免新旧数据混在一屏。
-//------------------------------------------------------------------
-            if (ext_tb_we)  begin tb_div     <= ext_tb;  arm <= 1'b1; end
-            if (ext_run_we) begin run        <= ext_run; arm <= 1'b1; end
-            if (ext_ten_we) begin trig_en    <= ext_ten; arm <= 1'b1; end
-            if (ext_lvl_we) begin trig_level <= ext_lvl; end
-            if (ext_edg_we) begin trig_edge  <= ext_edg; end
-            if (ext_scr_we) begin scroll_en  <= ext_scr; end
+            // ---- 串口(后写优先) ----
+            if (ext_tb_we)    begin tb_div     <= ext_tb;    arm <= 1'b1; end
+            if (ext_run_we)   begin run        <= ext_run;   arm <= 1'b1; end
+            if (ext_ten_we)   begin trig_en    <= ext_ten;   arm <= 1'b1; end
+            if (ext_lvl_we)   begin trig_level <= ext_lvl;   end
+            if (ext_edg_we)   begin trig_edge  <= ext_edg;   end
+            if (ext_scr_we)   begin scroll_en  <= ext_scr;   end
+            if (ext_tmode_we) begin trig_mode  <= ext_tmode; arm <= 1'b1; end
+            if (ext_tsrc_we)  begin trig_src   <= ext_tsrc;  arm <= 1'b1; end
+            if (ext_pre_we)   begin pre_trig   <= ext_pre;   arm <= 1'b1; end
+            if (ext_hold_we)  begin holdoff    <= ext_hold;  end
+
+            // ---- 正常模式：捕获完成自动重触发（连续刷新） ----
+            if (cap_done && (trig_mode == 2'd1) && run)
+                arm <= 1'b1;
         end
     end
+
+    //------------------------------------------------------------------
+    // 会话状态输出（给文本层/调试用）
+    //------------------------------------------------------------------
+    assign state_o = (!run)                       ? 3'd0 :   // STOP
+                     (cap_state == 2'd3)          ? 3'd3 :   // DONE
+                     (cap_state == 2'd0)          ? 3'd1 :   // IDLE
+                                                    3'd2 ;   // ARMED / FILL
 
 endmodule

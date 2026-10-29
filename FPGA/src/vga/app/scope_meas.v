@@ -1,78 +1,87 @@
 //==============================================================================
-// 层: 应用(测量)  文件: app/scope_meas.v
-// 功能: 【特性2 自动测量】在每个显示帧(帧起始脉冲)内统计:
-//   - 峰峰值 vpp = max - min
-//   - 过零(阈值 512)上升次数 cnt -> 频率约 cnt * 帧频(60Hz)
-// 说明: 统计窗口 = 一帧，结果在帧起始打一拍输出，供文本层显示。
+// 层: 应用(测量)  文件: app/scope_meas.v   [v2: 扩展测量]
+// 功能: 每个显示帧内统计波形特征，帧起始输出上一帧结果：
+//   vpp  峰峰值 = max - min；vmax/vmin 本帧最大/最小
+//   vmean  前 256 个采样点的平均值（右移 8 位，无需除法器）
+//   period 相邻两次上升穿越之间的采样点数
+//   freq   帧内上升穿越次数 x 帧频(约 60Hz)
+//   duty   前 256 点中高于阈值的比例(0~100)
+// 说明: RMS 需要开方，本版本不实现（可用 CORDIC 或查表，后续再加）。
 //==============================================================================
 `timescale 1ns / 1ps
 
-//
-// ============================ 怎么读这个文件 ============================
-// 自动测量：在不存整屏数据的前提下，仅用几个计数器统计一帧内的波形特征。
-//   vpp  峰峰值 = 本帧最大值 - 最小值
-//   freq 频率   ≈ 本帧内“向上穿过中点”的次数 x 帧频(约 60Hz)
-// 统计窗口与显示同步：收到 frame(帧起始) 就把上一帧结果打出来，然后清零重算。
-// 初学者提示：这种“边扫边统计”的思路很常用，比先存一整帧再分析省资源得多。
-// ======================================================================
 module scope_meas #(
     parameter integer THRESH = 512
 )(
     input  wire        clk,
     input  wire        rst,
     input  wire [9:0]  din,
-    input  wire        tick,        // 采样节拍
-    input  wire        frame,       // 帧起始(单周期)
+    input  wire        tick,
+    input  wire        frame,
     output reg  [9:0]  vpp,
-    output reg  [15:0] freq
+    output reg  [9:0]  vmax,
+    output reg  [9:0]  vmin,
+    output reg  [9:0]  vmean,
+    output reg  [15:0] freq,
+    output reg  [15:0] period,
+    output reg  [7:0]  duty
 );
-
-//------------------------------------------------------------------
-// vmin/vmax：本帧的最小/最大值（初始化为 1023/0，保证第一次比较一定更新）。
-// cnt：过零次数；din_d：上一拍采样，用来判断“上升沿”。
-//------------------------------------------------------------------
-    reg [9:0]  vmin;
-    reg [9:0]  vmax;
-    reg [15:0] cnt;
-    reg [9:0]  din_d;
 
     localparam [9:0] TH = THRESH;
 
-//------------------------------------------------------------------
-// 上升穿越判据：上一拍 < 阈值，本拍 >= 阈值。
-// 用一个固定阈值(默认 512，即 ADC 中点)而不是“峰值一半”，逻辑最简单。
-//------------------------------------------------------------------
+    reg [9:0]  vmax_i, vmin_i;
+    reg [15:0] cnt;
+    reg [15:0] period_cnt;
+    reg [15:0] period_lat;
+    reg [17:0] sum;
+    reg [8:0]  win_cnt;
+    reg [8:0]  high_cnt;
+    reg [9:0]  din_d;
+
     wire rise = (din_d < TH) && (din >= TH);
 
     always @(posedge clk) begin
         if (rst) begin
-            vmin <= 10'h3FF;
-            vmax <= 10'd0;
-            cnt  <= 16'd0;
+            vmax_i <= 10'd0;      vmin_i <= 10'h3FF;
+            cnt <= 16'd0;         period_cnt <= 16'd0;  period_lat <= 16'd0;
+            sum <= 18'd0;         win_cnt <= 9'd0;      high_cnt <= 9'd0;
             din_d <= 10'd0;
-            vpp  <= 10'd0;
-            freq <= 16'd0;
+            vpp <= 10'd0; vmax <= 10'd0; vmin <= 10'd0; vmean <= 10'd0;
+            freq <= 16'd0; period <= 16'd0; duty <= 8'd0;
         end
-//------------------------------------------------------------------
-// [帧边界] 把统计结果输出，然后清零，开始统计下一帧。
-// freq = cnt * 60：因为一帧约 60 分之一秒，所以每秒次数 = 每帧次数 x 60。
-// 注意：这是近似值，分辨率 60Hz，只适合看个大概。
-//------------------------------------------------------------------
         else if (frame) begin
-            vpp  <= vmax - vmin;          // 上一帧统计结果
-            freq <= cnt * 16'd60;         // 帧频约 60Hz
-            vmin <= 10'h3FF;
-            vmax <= 10'd0;
-            cnt  <= 16'd0;
+            vpp    <= vmax_i - vmin_i;
+            vmax   <= vmax_i;
+            vmin   <= vmin_i;
+            vmean  <= sum[17:8];
+            period <= period_lat;
+            freq   <= cnt * 16'd60;
+            duty   <= (win_cnt == 9'd0) ? 8'd0 : ((high_cnt * 8'd100) >> 8);
+
+            vmax_i <= 10'd0;      vmin_i <= 10'h3FF;
+            cnt <= 16'd0;         period_cnt <= 16'd0;
+            sum <= 18'd0;         win_cnt <= 9'd0;   high_cnt <= 9'd0;
         end
-//------------------------------------------------------------------
-// [采样节拍] 每来一个采样点就更新 min/max，并在上升穿越时计数 +1。
-//------------------------------------------------------------------
         else if (tick) begin
             din_d <= din;
-            if (din < vmin) vmin <= din;
-            if (din > vmax) vmax <= din;
-            if (rise)       cnt  <= cnt + 16'd1;
+
+            if (din > vmax_i) vmax_i <= din;
+            if (din < vmin_i) vmin_i <= din;
+
+            if (rise) begin
+                cnt        <= cnt + 16'd1;
+                period_lat <= period_cnt;
+                period_cnt <= 16'd0;
+            end
+            else if (period_cnt != 16'hFFFF) begin
+                period_cnt <= period_cnt + 16'd1;
+            end
+
+            if (win_cnt != 9'd256) begin
+                sum      <= sum + {8'd0, din};
+                win_cnt  <= win_cnt + 9'd1;
+                if (din > TH) high_cnt <= high_cnt + 9'd1;
+            end
         end
     end
 
