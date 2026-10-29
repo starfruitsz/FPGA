@@ -30,6 +30,7 @@ module scope_cmd (
     reg [3:0]  ndig;
     reg [3:0]  nib;
     reg        is_hex;
+    reg        have_cmd;   // [修复] 第一个字符一律当命令字母，避免 A/C/E 被当十六进制数字
 
     // 字符解码
     always @(*) begin
@@ -53,7 +54,7 @@ module scope_cmd (
             edg_we<=0; edg_val<=0; scr_we<=0; scr_val<=0;
             tmode_we<=0; tmode_val<=0; tsrc_we<=0; tsrc_val<=0;
             pre_we<=0; pre_val<=0; hold_we<=0; hold_val<=0;
-            cmd<=0; acc<=0; ndig<=0;
+            cmd<=0; acc<=0; ndig<=0; have_cmd<=1'b0;
         end
         else begin
             tb_we<=1'b0; run_we<=1'b0; ten_we<=1'b0; lvl_we<=1'b0;
@@ -75,18 +76,23 @@ module scope_cmd (
                         8'h48: begin hold_val  <= acc;        hold_we  <= 1'b1; end  // H
                         default: ;
                     endcase
-                    cmd  <= 8'd0;
-                    acc  <= 16'd0;
-                    ndig <= 4'd0;
+                    cmd      <= 8'd0;
+                    acc      <= 16'd0;
+                    ndig     <= 4'd0;
+                    have_cmd <= 1'b0;
                 end
-                else if (is_hex && (ndig != 4'd4)) begin
+                else if (have_cmd && is_hex && (ndig != 4'd4)) begin
                     acc  <= {acc[11:0], nib};
                     ndig <= ndig + 4'd1;
                 end
+                else if (!have_cmd) begin
+                    cmd      <= rx_data;
+                    acc      <= 16'd0;
+                    ndig     <= 4'd0;
+                    have_cmd <= 1'b1;
+                end
                 else begin
-                    cmd  <= rx_data;
-                    acc  <= 16'd0;
-                    ndig <= 4'd0;
+                    // 命令后出现非十六进制字符：忽略
                 end
             end
         end

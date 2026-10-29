@@ -33,3 +33,4 @@
 ../FPGA/src/adc/abs/adc_cfg.v
 ../FPGA/src/adc/adc_ad7606_top.v
 ../FPGA/src/adc/hal/adc_ad7606_spi.v
+../FPGA/src/adc/app/adc_cmd.v
