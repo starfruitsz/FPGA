@@ -17,7 +17,7 @@
 | 注释后源码 | `FPGA/src/**` | 17 个文件，仅新增 `//` 注释 |
 | 原始源码备份 | `FPGA/src_original_backup/**` | 注释前的逐字节副本 |
 | LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 16 章（ch01–ch16）+ main/style/appendix |
-| 最终 PDF | `FPGA_project_analysis.pdf`（115 页） | 与 `doc/main.pdf` 相同 |
+| 最终 PDF | `FPGA_project_analysis.pdf`（116 页） | 与 `doc/main.pdf` 相同 |
 | TD 打开截图 | `TD_open_project.jpg` | 层次树已识别 adda(7)/Gowin_PLL(1)/fifo_top(4) |
 | **VGA 示波器（分层）** | `FPGA/src/vga/**` | HAL/抽象/应用三层，引脚表与时基可配 |
 | VGA 屏幕预览 | `FPGA/src/vga/preview_640x480.png` | 用 Python 复现渲染结果的效果图 |
@@ -46,6 +46,8 @@
   | FEAT_UART | ④ 串口配置 | ASCII 命令 T/R/A/L/E/S（独立第二路 uart_rx） |
 - **屏幕自检**：`TEST_MODE=1`（或把 Top 设为 `vga_test_top`）即输出 5 幅自检画面
   （彩条/灰阶/棋盘/边框+移动方块/文字），用来单独判断屏幕与接线，与示波器完全解耦；
+- **初学者级注释**：VGA 子系统 16 个源文件均按“文件导读 → 每个 always/assign 块 → 块内每条语句”注释，
+  含概念解释（为什么用 pix_ce 而不是分频时钟、BSRAM 为什么晚一拍、同步信号为什么要延迟 2 拍等）；
 - **无帧缓存**：只在像素列上做 "y 映射 + 相邻点竖线连接"，2 块 BSRAM、约 1.7K LUT；
 - **验证**：TD 6.0.3 前端分析 23 个文件通过；自写端口检查 26 处例化 0 错误；
   渲染数学用 Python 复现并出图（`preview_640x480.png`）。

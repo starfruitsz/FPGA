@@ -49,7 +49,9 @@
 \end{tabular}
 \end{center}
 
-\subsubsection{块 1：时序例化（29--45 行）}
+\noindent 说明：下文按“块序号”索引，各小节序号与源码里的 \sig{[块 N]} 注释一一对应；源码中的中文注释已细化到每个语句块内部，行号随注释增删会变化，故不在此标注具体行号。
+
+\subsubsection{块 1：时序例化}
 
 \begin{lstlisting}[style=vsnip]
 vga_timing #(
@@ -65,7 +67,7 @@ vga_timing #(
 自检顶层没有采样、没有缓存，直接把 HAL 时序的输出坐标交给图案发生器；参数全部
 透传，所以换分辨率时与示波器一样只改顶层参数。
 
-\subsubsection{块 2：帧起始脉冲（48--50 行）}
+\subsubsection{块 2：帧起始脉冲}
 
 \begin{lstlisting}[style=vsnip]
 reg vs_d;
@@ -77,7 +79,7 @@ wire frame = vs & (~vs_d);
 自动换画面的计数、移动方块的推进、以及（示波器里的）滚动基准。本设计采用负极性
 同步（\sig{V_POL=0}），场同步的上升沿正好落在消隐结束处，因此与“帧首”对齐。
 
-\subsubsection{块 3：按键复用（52--64 行）}
+\subsubsection{块 3：按键复用}
 
 \begin{lstlisting}[style=vsnip]
 scope_ui #(.CLK_HZ(50_000_000), .DB_MS(20), .LONG_MS(800)) u_key (
@@ -88,7 +90,7 @@ scope_ui #(.CLK_HZ(50_000_000), .DB_MS(20), .LONG_MS(800)) u_key (
 
 直接复用示波器的按键模块，不重复实现消抖；长按事件在自检模式中不使用。
 
-\subsubsection{块 4：图案例化（66--80 行）}
+\subsubsection{块 4：图案例化}
 
 \begin{lstlisting}[style=vsnip]
 vga_test_app #(
@@ -103,7 +105,7 @@ vga_test_app #(
 图案模块只接收“当前像素坐标 + 有效区 + 事件”，返回该像素的颜色，属于典型的
 \textbf{流式渲染}接口，不需要帧缓存。
 
-\subsubsection{块 5：输出寄存与对齐（85--112 行）}
+\subsubsection{块 5：输出寄存与对齐}
 
 \begin{lstlisting}[style=vsnip]
 always @(posedge clk) begin
@@ -136,7 +138,7 @@ end
 \end{tabular}
 \end{center}
 
-\subsubsection{块 1：模式与动画计数（40--76 行）}
+\subsubsection{块 1：模式与动画计数}
 
 \begin{lstlisting}[style=vsnip]
 if (frame) begin
@@ -160,7 +162,7 @@ end
         因此移动方块在 2.5 秒左右扫过一屏。
 \end{itemize}
 
-\subsubsection{块 2：彩条画面（78--96 行）}
+\subsubsection{块 2：彩条画面}
 
 \begin{lstlisting}[style=vsnip]
 wire [2:0] bar_idx = px[8:6];
@@ -178,7 +180,7 @@ end
 10 段，最后两段会重复白/黄，属于预期现象。该画面用于检查 \sig{vga_rgb[11:10]}、
 \sig{[7:6]}、\sig{[3:2]} 与显示器 RGB 的对应关系以及电阻网络的电平。
 
-\subsubsection{块 3：灰阶画面（98--101 行）}
+\subsubsection{块 3：灰阶画面}
 
 \begin{lstlisting}[style=vsnip]
 wire [3:0] gray_lvl = py[8:6];          // 0..7
@@ -188,7 +190,7 @@ wire [11:0] gray_col = {gray_lvl, gray_lvl, gray_lvl};
 用行号的高 3 位产生 8 级灰度，R=G=B，用来判断三个通道的增益是否一致
 （若某一级偏色，说明该通道的电阻比例或焊接有问题）。
 
-\subsubsection{块 4：棋盘格（103--105 行）}
+\subsubsection{块 4：棋盘格}
 
 \begin{lstlisting}[style=vsnip]
 wire chk = px[5] ^ py[5];
@@ -197,7 +199,7 @@ wire chk = px[5] ^ py[5];
 每 32 像素翻转一次，形成 32$\times$32 的黑白棋盘。该项对“像素时钟是否稳定、
 行场同步是否抖动”最敏感：若出现斜纹、抖动或局部错位，通常是像素时钟或同步时序问题。
 
-\subsubsection{块 5：边框、十字与移动方块（107--116 行）}
+\subsubsection{块 5：边框、十字与移动方块}
 
 \begin{lstlisting}[style=vsnip]
 wire border = (px < 4) || (px >= H_VIS-4) || (py < 4) || (py >= V_VIS-4);
@@ -209,7 +211,7 @@ wire moving = (px >= box_x) && (px < box_x + 48) && (py >= 200) && (py < 248);
 4 像素宽的白色边框检查“满屏是否被裁切”，红色十字检查画面中心与几何比例，
 48$\times$48 的绿色方块逐帧右移，用来确认帧刷新与无撕裂。
 
-\subsubsection{块 6：文字画面（118--166 行）}
+\subsubsection{块 6：文字画面}
 
 \begin{lstlisting}[style=vsnip]
 wire in_t0 = (px >= tx0) && (px < tx0+64) && (py >= ty0) && (py < ty0+8);
@@ -226,7 +228,7 @@ wire text_hit = (in_t0 || in_t1) && font_bits[3'd7 - bit_idx];
 字符码由 \sig{case(col)} 常量表给出（V/G/A/空格/T/E/S 与 6/4/0/X/4/8/0/空格/6/0/H/Z），
 只用一个 \file{font_rom} 实例，按“当前所在行”多路选择输入，因此字模资源只有一份。
 
-\subsubsection{块 7：画面选择（168--186 行）}
+\subsubsection{块 7：画面选择}
 
 \begin{lstlisting}[style=vsnip]
 always @(*) begin
