@@ -16,3 +16,5 @@ doc/rendered/
 *.log
 *.toc
 *.out
+doc/_*.txt
+doc/_*.tex
