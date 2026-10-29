@@ -3,6 +3,8 @@
 本目录针对 `C:\Users\Administrator\Desktop\task\FPGA` 下的高云（Gowin）工程做了三件事：
 用安路 TD 打开浏览、给全部源码逐块加注释、把解析写成 LaTeX 文档并编译成 PDF。
 
+**代码仓库**：<https://github.com/starfruitsz/FPGA>
+
 ---
 
 ## 1. 交付物清单
@@ -14,8 +16,8 @@
 | 建立工程脚本 | `FPGA_TD/make_prj.tcl` | 可重复执行，重建容器工程 |
 | 注释后源码 | `FPGA/src/**` | 17 个文件，仅新增 `//` 注释 |
 | 原始源码备份 | `FPGA/src_original_backup/**` | 注释前的逐字节副本 |
-| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 16 个章节文件 |
-| 最终 PDF | `FPGA_project_analysis.pdf`（96 页） | 与 `doc/main.pdf` 相同 |
+| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 17 个章节文件（新增第 15 章 VGA 子系统） |
+| 最终 PDF | `FPGA_project_analysis.pdf`（102 页） | 与 `doc/main.pdf` 相同 |
 | TD 打开截图 | `TD_open_project.jpg` | 层次树已识别 adda(7)/Gowin_PLL(1)/fifo_top(4) |
 | **VGA 示波器（分层）** | `FPGA/src/vga/**` | HAL/抽象/应用三层，引脚表与时基可配 |
 | VGA 屏幕预览 | `FPGA/src/vga/preview_640x480.png` | 用 Python 复现渲染结果的效果图 |

@@ -23,9 +23,10 @@
 \toprule
 器件型号 & \sig{GW5A-LV25UG324C2/I1}（\sig{GW5A-25A}，UBGA324，速度等级 2）\\
 目标板卡 & AD/DA 采集 + 串口 + 数码管 + ADRC 控制演示板\\
-顶层模块 & \texttt{adda}（\file{src/adda.v}）\\
+顶层模块 & \texttt{adda\_scope\_top}（\file{src/vga/adda_scope_top.v}，含 VGA 示波器）\\
 工程文件 & \file{project_2025_11_07.gprj}（Gowin EDA V1.9.9 64-bit）\\
 对照工程 & \file{FPGA_TD/project_2025_11_07_TD.al}（Anlogic TD 6.0.3 浏览用容器）\\
+代码仓库 & \url{https://github.com/starfruitsz/FPGA}\\
 文档版本 & v1.0 \\
 生成日期 & 2026-10-29 \\
 \bottomrule
@@ -55,6 +56,7 @@
 \input{ch12_fifo}
 \input{ch13_cst}
 \input{ch14_review}
+\input{ch15_vga_scope}
 \input{appendix}
 
 \end{document}
