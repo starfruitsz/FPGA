@@ -212,6 +212,22 @@
                     <Attr Name="CompileOrder" Val="25"/>
                 </FileInfo>
             </File>
+            <File Path="../FPGA/src/vga/app/vga_test_app.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="26"/>
+                </FileInfo>
+            </File>
+            <File Path="../FPGA/src/vga/vga_test_top.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="27"/>
+                </FileInfo>
+            </File>
         </Verilog>
     </Source_Files>
     <FileSets>

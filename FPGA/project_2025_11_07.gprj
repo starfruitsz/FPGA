@@ -30,6 +30,8 @@
         <File path="src/vga/app/scope_cmd.v" type="file.verilog" enable="1"/>
         <File path="src/vga/vga_scope_top.v" type="file.verilog" enable="1"/>
         <File path="src/vga/adda_scope_top.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/app/vga_test_app.v" type="file.verilog" enable="1"/>
+        <File path="src/vga/vga_test_top.v" type="file.verilog" enable="1"/>
         <File path="src/project_2025_11_07.cst" type="file.cst" enable="1"/>
     </FileList>
 </Project>

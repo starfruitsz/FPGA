@@ -22,6 +22,37 @@
 
 ---
 
+### 0.1 屏幕自检（TEST_MODE）
+
+用于**上板前判断屏幕、接线、时序是否正常**，与示波器功能完全解耦：
+
+| 开关 | 默认 | 作用 |
+|---|---|---|
+| `TEST_MODE` | 0 | 1 = VGA 口输出自检图案（不依赖 AD/DA，只用 sys_clk/复位/按键）；0 = 正常示波器 |
+
+自检共有 5 幅画面，约 2 s 自动切换，**短按按键手动切换**：
+
+| # | 画面 | 用来判断 |
+|---|---|---|
+| 0 | 8 色竖条（白/黄/青/绿/品红/红/蓝/黑） | RGB 接线顺序、电平幅度 |
+| 1 | 8 级灰阶横条 | DAC/电阻网络线性、位序 |
+| 2 | 32×32 棋盘格 | 像素时钟、同步是否稳定、有无撕裂 |
+| 3 | 四边白框 + 红十字 + 移动绿块 | 满屏/几何比例、帧刷新 |
+| 4 | 文字 "VGA TEST" / "640X480 60HZ" | 字模、像素对齐 |
+
+两种用法：
+
+1. **只测屏**：Gowin 里把 Top Module 设为 `vga_test_top`（引脚不变）；
+2. **复用主工程**：把 `adda_scope_top.v` 里的 `TEST_MODE` 改成 1 再综合，
+   VGA 口即输出自检图案，AD/DA 通路不受影响（拔掉模拟板也能测）。
+
+实现上只新增两个文件（`app/vga_test_app.v` 图案发生器、`vga_test_top.v` 自检顶层），
+**完全复用** HAL 的 `vga_timing` / `font_rom` 与 APP 的 `scope_ui` 按键模块，
+**没有修改 hal/abs 任何封装**。
+
+---
+
+
 ## 1. 分层结构
 
 ~~~
@@ -65,6 +96,8 @@
 | APP | `app/scope_app.v` | 寄存器与按键仲裁 |
 | APP | `app/scope_ui.v` | 按键去抖/长短按 |
 | TOP | `vga_scope_top.v` | 参数、特性开关、装配 |
+| TOP | `vga_test_top.v` | 屏幕自检顶层（TEST_MODE=1 时使用） |
+| APP | `app/vga_test_app.v` | 5 幅自检图案发生器 |
 | TOP | `adda_scope_top.v` | 原 adda + 示波器 + 串口配置（新 Top） |
 | 配置 | `pins/scope_pins.csv` | IO 列表（端口→引脚） |
 | 配置 | `pins/gen_cst.py` | CSV → .cst |

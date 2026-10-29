@@ -49,6 +49,12 @@ module adda_scope_top (
     localparam integer FEAT_SCROLL = 1;   // 特性3 滚动显示
     localparam integer FEAT_UART   = 1;   // 特性4 串口在线配置
 
+    //==================================================================
+    // 屏幕自检开关: 1 = VGA 口输出自检图案(不依赖 AD/DA)，0 = 正常示波器
+    // 自检画面约 2s 自动切换，短按按键手动切换(彩条/灰阶/棋盘/边框+方块/文字)
+    //==================================================================
+    localparam integer TEST_MODE   = 0;
+
     //------------------------------------------------------------------
     // 原工程
     //------------------------------------------------------------------
@@ -115,33 +121,49 @@ module adda_scope_top (
     //------------------------------------------------------------------
     // 示波器
     //------------------------------------------------------------------
-    vga_scope_top #(
-        .FEAT_TRIG  (FEAT_TRIG),
-        .FEAT_MEAS  (FEAT_MEAS),
-        .FEAT_SCROLL(FEAT_SCROLL),
-        .FEAT_UART  (FEAT_UART)
-    ) u_scope (
-        .clk       (sys_clk),
-        .rst       (~sys_rst_n),
-        .ch0_in    (ad_date),
-        .ch1_in    (ad_out),
-        .key_in    (key_in),
-        .cfg_tb_we (c_tb_we),
-        .cfg_tb    (c_tb),
-        .cfg_run_we(c_run_we),
-        .cfg_run   (c_run),
-        .cfg_ten_we(c_ten_we),
-        .cfg_ten   (c_ten),
-        .cfg_lvl_we(c_lvl_we),
-        .cfg_lvl   (c_lvl),
-        .cfg_edg_we(c_edg_we),
-        .cfg_edg   (c_edg),
-        .cfg_scr_we(c_scr_we),
-        .cfg_scr   (c_scr),
-        .vga_rgb   (vga_rgb),
-        .vga_hs    (vga_hs),
-        .vga_vs    (vga_vs),
-        .vga_de    (vga_de)
-    );
+    generate
+        if (TEST_MODE != 0) begin : g_test
+            // ---- 屏幕自检: 只依赖 sys_clk / 复位 / 按键 ----
+            vga_test_top u_test (
+                .clk    (sys_clk),
+                .rst    (~sys_rst_n),
+                .key_in (key_in),
+                .vga_rgb(vga_rgb),
+                .vga_hs (vga_hs),
+                .vga_vs (vga_vs),
+                .vga_de (vga_de)
+            );
+        end
+        else begin : g_scope
+            vga_scope_top #(
+                .FEAT_TRIG  (FEAT_TRIG),
+                .FEAT_MEAS  (FEAT_MEAS),
+                .FEAT_SCROLL(FEAT_SCROLL),
+                .FEAT_UART  (FEAT_UART)
+            ) u_scope (
+                .clk       (sys_clk),
+                .rst       (~sys_rst_n),
+                .ch0_in    (ad_date),
+                .ch1_in    (ad_out),
+                .key_in    (key_in),
+                .cfg_tb_we (c_tb_we),
+                .cfg_tb    (c_tb),
+                .cfg_run_we(c_run_we),
+                .cfg_run   (c_run),
+                .cfg_ten_we(c_ten_we),
+                .cfg_ten   (c_ten),
+                .cfg_lvl_we(c_lvl_we),
+                .cfg_lvl   (c_lvl),
+                .cfg_edg_we(c_edg_we),
+                .cfg_edg   (c_edg),
+                .cfg_scr_we(c_scr_we),
+                .cfg_scr   (c_scr),
+                .vga_rgb   (vga_rgb),
+                .vga_hs    (vga_hs),
+                .vga_vs    (vga_vs),
+                .vga_de    (vga_de)
+            );
+        end
+    endgenerate
 
 endmodule
