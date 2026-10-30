@@ -73,7 +73,9 @@ Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj
 - `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
 - `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
   已安装 **TD 5.6.5 SP5**（`C:\Anlogic\TD_5.6.5_SP5_170.155`，含 `arch/eagle_20.db`），
-  新工程 `FPGA_TD/scope_eg4_56.al` 可打开并分析 35 个文件；综合需 `license/Anlogic.lic`（本机 MAC `40-A5-EF-5E-1D-40`），仍在申请。
+- `FPGA_TD/scope_eg4_59.al`：TD 5.6.5 + EG4S20BG256 完整流程（37 个文件，顶层 `sparkroad_scope_top`）；
+  **已综合/布局布线成功**：LUT 1657/19600（8.45%）、REG 848、DSP 6/29、BRAM 4/64、PAD 51/188；
+  时序 0 setup/0 hold 错误（最小周期 20.79ns ≈ 48MHz）；比特流 `FPGA_TD/eg4/bit/scope_eg4_59.bit`（634,296 字节）。
 
 ## 1.3 SparkRoad-V（EG4S20BG256）移植（新增）
 
