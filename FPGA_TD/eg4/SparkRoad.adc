@@ -8,7 +8,14 @@ set_pin_assignment {clk} { LOCATION = K14; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {rst_n} { LOCATION = G11; IOSTANDARD = LVCMOS33; }
 
 #### key BUTTON_L
-set_pin_assignment {key} { LOCATION = H14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[0]} { LOCATION = T4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[1]} { LOCATION = R5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[2]} { LOCATION = T5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[3]} { LOCATION = T6; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_l} { LOCATION = H14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_u} { LOCATION = J13; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_d} { LOCATION = G12; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_r} { LOCATION = L12; IOSTANDARD = LVCMOS33; }
 
 #### uart_tx USB2UART
 set_pin_assignment {uart_tx} { LOCATION = F16; IOSTANDARD = LVCMOS33; }
@@ -91,4 +98,3 @@ set_pin_assignment {ad7606_reset} { LOCATION = A6; IOSTANDARD = LVCMOS33; }
 
 #### ad7606_ser GPIO 建议(或接 3.3V)
 set_pin_assignment {ad7606_ser} { LOCATION = A3; IOSTANDARD = LVCMOS33; }
-

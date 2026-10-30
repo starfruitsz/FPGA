@@ -16,7 +16,11 @@ module sparkroad_scope_top #(
     // 时钟/复位/按键
     input  wire        clk,          // K14 24MHz
     input  wire        rst_n,        // G11 BUTTON_C，低有效
-    input  wire        key,          // H14 BUTTON_L
+    input  wire        key_l,        // H14 BUTTON_L
+    input  wire        key_u,        // J13 BUTTON_U
+    input  wire        key_d,        // G12 BUTTON_D
+    input  wire        key_r,        // L12 BUTTON_R
+    input  wire [3:0]  sw,           // SW0..SW3 拨动开关 (T4/R5/T5/T6)
     // 串口
     output wire        uart_tx,      // F16
     input  wire        uart_rx,      // E16
@@ -138,22 +142,43 @@ module sparkroad_scope_top #(
     );
 
     //------------------------------------------------------------------
-    // 演示信号源（DEMO_SINE=1 时不接 ADC，直接给示波器灌 50Hz 正弦）
+    //------------------------------------------------------------------
+    // 4 键（低有效）与函数发生器设置
+    //------------------------------------------------------------------
+    wire [3:0] key_n = {key_u, key_d, key_l, key_r};
+
+    // 拨动开关同步 + 消抖
+    wire sw0_lv, sw1_lv, sw2_lv, sw3_lv;
+    wire sw0_rise, sw1_rise, sw2_rise, sw3_rise;
+    sw_edge u_sw0 (.clk(clk), .rst(rst), .sw_in(sw[0]), .lv(sw0_lv), .rise(sw0_rise));
+    sw_edge u_sw1 (.clk(clk), .rst(rst), .sw_in(sw[1]), .lv(sw1_lv), .rise(sw1_rise));
+    sw_edge u_sw2 (.clk(clk), .rst(rst), .sw_in(sw[2]), .lv(sw2_lv), .rise(sw2_rise));
+    sw_edge u_sw3 (.clk(clk), .rst(rst), .sw_in(sw[3]), .lv(sw3_lv), .rise(sw3_rise));
+    wire [1:0] gen_wave;
+    wire [2:0] gen_freq;
+    wire [1:0] gen_amp;
+    wire       menu_on;
+    wire [3:0] gen_phase;
+
+    // 演示信号源（DEMO_SINE=1 时不接 ADC，用内置函数发生器给示波器灌信号）
     //   上电后自动下发一次 T0 / A1 / M1 / L512：
     //     T0    -> tb_div=0（ADC 侧已经给好采样率，前端不再分频）
     //     A1    -> 触发使能
-    //     M2    -> single 触发模式（捕获满一屏后冻结，避免无双缓冲导致的撕裂）
+    //     M1    -> 连续刷新（跟踪模式，画面实时跟随信号；改成 M2 则为单次冻结）
     //     L512  -> 触发电平 = 中点
     //------------------------------------------------------------------
-    wire [9:0] sine_data;
-    wire       sine_valid;
+    wire [9:0] gen_data;
+    wire       gen_valid;
 
-    sine_50hz #(.CLK_HZ(CLK_HZ)) u_sine (
-        .clk(clk), .rst(rst), .data(sine_data), .valid(sine_valid)
+    // 内置函数发生器：DDS 波形可选（正弦/方波/三角/锯齿）+ 8 档频率 + 4 档幅度
+    func_gen #(.CLK_HZ(CLK_HZ), .FS_HZ(12_000)) u_gen (
+        .clk(clk), .rst(rst),
+        .wave(gen_wave), .freq_sel(gen_freq), .amp_sel(gen_amp), .phase_idx(gen_phase),
+        .data(gen_data), .valid(gen_valid)
     );
 
-    wire [9:0] scope_ch0 = DEMO_SINE ? sine_data : adc_data[9:0];
-    wire       scope_val = DEMO_SINE ? sine_valid : adc_valid;
+    wire [9:0] scope_ch0 = DEMO_SINE ? gen_data  : adc_data[9:0];
+    wire       scope_val = DEMO_SINE ? gen_valid : adc_valid;
 
     reg [7:0] boot_cnt;
     always @(posedge clk) begin
@@ -187,14 +212,19 @@ module sparkroad_scope_top #(
         .TEXT_Y0(448), .TEXT_X0(8),
         .DEPTH_LOG2(10),
         .CLK_HZ(CLK_HZ),
-        .FEAT_TRIG(1), .FEAT_MEAS(1), .FEAT_SCROLL(1), .FEAT_UART(1)
+        .FEAT_TRIG(1), .FEAT_MEAS(1), .FEAT_SCROLL(1), .FEAT_UART(1),
+        .GEN_ENA(DEMO_SINE)
     ) u_scope (
         .clk       (clk),
         .rst       (rst),
         .ch0_in    (scope_ch0),
         .ch1_in    (10'd512),      // 板上无 DAC，CH1 暂接中点
         .adc_valid (scope_val),
-        .key_in    (key),
+        .key_n     (key_n),
+        .sw_menu   (sw0_lv),          // 电平：拨上=菜单开
+        .sw_run    (sw1_lv),          // 电平：拨上=运行
+        .sw_page   (sw2_lv),          // 电平：拨上=信号源页
+        .sw_roll   (sw3_lv),          // 电平：拨上=滚动模式
         .cfg_tb_we (demo_cfg ? demo_tb_we    : cfg_tb_we),    .cfg_tb(demo_cfg ? 16'd0  : cfg_tb),
         .cfg_run_we(cfg_run_we),  .cfg_run(cfg_run),
         .cfg_ten_we(demo_cfg ? demo_ten_we   : cfg_ten_we),   .cfg_ten(demo_cfg ? 1'b1 : cfg_ten),
@@ -203,14 +233,19 @@ module sparkroad_scope_top #(
         .cfg_scr_we(cfg_scr_we),  .cfg_scr(cfg_scr),
         // 演示用 M2（single）：采一屏就冻结。用 M1(normal) 会每 85ms 重新采集，
         // 而本设计没有双缓冲，写指针会扫过正在显示的 RAM，屏幕上出现波形撕裂/重影。
-        .cfg_tmode_we(demo_cfg ? demo_tmode_we : cfg_tmode_we), .cfg_tmode(demo_cfg ? 2'd2 : cfg_tmode),
+        .cfg_tmode_we(demo_cfg ? demo_tmode_we : cfg_tmode_we), .cfg_tmode(demo_cfg ? 2'd1 : cfg_tmode),
         .cfg_tsrc_we (cfg_tsrc_we),  .cfg_tsrc(cfg_tsrc),
         .cfg_pre_we  (cfg_pre_we),   .cfg_pre(cfg_pre),
         .cfg_hold_we (cfg_hold_we),  .cfg_hold(cfg_hold),
         .vga_rgb   (vga_rgb),
         .vga_hs    (vga_hs),
         .vga_vs    (vga_vs),
-        .vga_de    (vga_de)
+        .vga_de    (vga_de),
+        .gen_wave  (gen_wave),
+        .gen_freq  (gen_freq),
+        .gen_amp   (gen_amp),
+        .menu_on_o (menu_on),
+        .gen_phase (gen_phase)
     );
 
     // RGB444 -> RGB888（每 4bit 复制一次，满量程）

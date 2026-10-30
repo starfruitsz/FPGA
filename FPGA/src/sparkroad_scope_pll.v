@@ -13,7 +13,11 @@
 module sparkroad_scope_pll (
     input  wire        clk,          // 24MHz (K14)
     input  wire        rst_n,        // BUTTON_C
-    input  wire        key,          // BUTTON_L
+    input  wire        key_l,        // BUTTON_L (H14)
+    input  wire        key_u,        // BUTTON_U (J13)
+    input  wire        key_d,        // BUTTON_D (G12)
+    input  wire        key_r,        // BUTTON_R (L12)
+    input  wire [3:0]  sw,           // SW0..SW3 拨动开关
     output wire        uart_tx,
     input  wire        uart_rx,
     output wire [7:0]  vga_r,
@@ -81,7 +85,8 @@ module sparkroad_scope_pll (
         .TX_MODE   (0),
         .DEMO_SINE (1)
     ) u_top (
-        .clk(sys_clk), .rst_n(sys_rst_n), .key(key),
+        .clk(sys_clk), .rst_n(sys_rst_n),
+        .key_l(key_l), .key_u(key_u), .key_d(key_d), .key_r(key_r), .sw(sw),
         .uart_tx(uart_tx), .uart_rx(uart_rx),
         .vga_r(vga_r), .vga_g(vga_g), .vga_b(vga_b),
         .vga_hs(vga_hs), .vga_vs(vga_vs), .vga_clk(vga_clk),

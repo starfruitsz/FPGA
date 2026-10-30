@@ -32,7 +32,7 @@ module tb_sparkroad_top;
     wire ad7606_busy, ad7606_douta;
 
     sparkroad_scope_top #(.CLK_HZ(24_000_000), .TX_MODE(0)) dut (
-        .clk(clk), .rst_n(rst_n), .key(key),
+        .clk(clk), .rst_n(rst_n), .key_l(key), .key_u(1'b1), .key_d(1'b1), .key_r(1'b1), .sw(4'b0010),
         .uart_tx(uart_tx), .uart_rx(uart_rx),
         .vga_r(vga_r), .vga_g(vga_g), .vga_b(vga_b),
         .vga_hs(vga_hs), .vga_vs(vga_vs), .vga_clk(vga_clk),
@@ -86,6 +86,7 @@ module tb_sparkroad_top;
     localparam [11:0] COL_BG=12'h012, COL_GRID=12'h151, COL_AXIS=12'h2A2,
                       COL_CH0=12'h1F1, COL_TEXT=12'hFFF;
     integer x_cnt=0, y_cnt=0, de_total=0, frame_captured=0;
+    integer timeout = 0;
     reg cap_en = 1'b0;
     integer n_bg=0, n_grid=0, n_axis=0, n_ch0=0, n_ch1=0, n_text=0;
     integer ch0_ymin=99999, ch0_ymax=-1;
@@ -159,6 +160,16 @@ module tb_sparkroad_top;
         repeat (500) @(posedge clk);
         $display("  串口命令 T0000 -> 顶层 cfg_tb = %0d (expect 0)", dut.cfg_tb);
         if (dut.cfg_tb !== 16'd0) begin errors=errors+1; $display("  FAIL 串口命令未生效"); end
+
+        // 1b) 切换到单次模式(M2)，让 RAM 采满后冻结，便于检查波形
+        send_byte(8'h4D); send_byte(8'h32); send_byte(8'h0D);
+        repeat (200) @(posedge clk);
+        timeout = 0;
+        while ((dut.u_scope.u_cap0.state !== 2'd3) && (timeout < 2000000)) begin
+            @(posedge clk);
+            timeout = timeout + 1;
+        end
+        $display("  单次采集: state=%0d (等待 %0d 拍)", dut.u_scope.u_cap0.state, timeout);
 
         // 2) 等 ADC 起振
         repeat (6000) @(posedge clk);

@@ -8,7 +8,7 @@ module tb_demo_check;
     wire convst, cs_n, sclk, adc_rst, ser;
 
     sparkroad_scope_demo dut (
-        .clk(clk), .rst_n(rst_n), .key(key), .uart_tx(uart_tx), .uart_rx(uart_rx),
+        .clk(clk), .rst_n(rst_n), .key_l(key), .key_u(1'b1), .key_d(1'b1), .key_r(1'b1), .sw(4'b0010), .uart_tx(uart_tx), .uart_rx(uart_rx),
         .vga_r(vga_r), .vga_g(vga_g), .vga_b(vga_b),
         .vga_hs(vga_hs), .vga_vs(vga_vs), .vga_clk(vga_clk),
         .seg(seg), .sel(sel),

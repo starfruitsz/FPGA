@@ -22,6 +22,7 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 $cases = @(
     @{ n = 'bcd';           tb = 'tb_bcd.v';           srcs = @('bcd.v') },
     @{ n = 'sine_50hz';     tb = 'tb_sine_50hz.v';     srcs = @('vga\\app\\sine_50hz.v') },
+    @{ n = 'func_gen';      tb = 'tb_func_gen.v';      srcs = @('vga\app\func_gen.v','vga\app\sw_edge.v') },
     @{ n = 'uart_rx';       tb = 'tb_uart_rx.v';       srcs = @('uart_rx.v') },
     @{ n = 'cmd_chain';     tb = 'tb_cmd_chain.v';
        srcs = @('uart_rx.v','vga\app\scope_cmd.v','adc\app\adc_cmd.v') },
@@ -36,22 +37,22 @@ $cases = @(
     @{ n = 'sparkroad_top'; tb = 'tb_sparkroad_top.v'; local = @('ad7606_model.v');
        srcs = @('sparkroad_scope_top.v','uart_rx.v','uart_tx.v','seg.v','bcd.v',
                 'vga\vga_scope_top.v','vga\hal\vga_timing.v','vga\hal\vram_sdp.v','vga\hal\font_rom.v',
-                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v',
+                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v','vga\abs\menu_layer.v',
                 'vga\app\scope_app.v','vga\app\scope_capture.v','vga\app\scope_meas.v','vga\app\scope_ui.v',
-                'vga\app\scope_cmd.v','vga\app\sine_50hz.v',
+                'vga\app\scope_cmd.v','vga\app\sine_50hz.v','vga\app\func_gen.v','vga\app\sw_edge.v',
                 'adc\adc_ad7606_top.v','adc\hal\adc_ad7606_spi.v','adc\abs\adc_cfg.v',
                 'adc\abs\adc_norm.v','adc\app\adc_cmd.v') },
     @{ n = 'vga_scope_top'; tb = 'tb_vga_scope_top.v';
        srcs = @('vga\vga_scope_top.v','vga\hal\vga_timing.v','vga\hal\vram_sdp.v','vga\hal\font_rom.v',
-                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v',
+                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v','vga\abs\menu_layer.v',
                 'vga\app\scope_app.v','vga\app\scope_capture.v','vga\app\scope_meas.v','vga\app\scope_ui.v') },
     @{ n = 'scope_trigger'; tb = 'tb_scope_trigger.v';
        srcs = @('vga\vga_scope_top.v','vga\hal\vga_timing.v','vga\hal\vram_sdp.v','vga\hal\font_rom.v',
-                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v',
+                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v','vga\abs\menu_layer.v',
                 'vga\app\scope_app.v','vga\app\scope_capture.v','vga\app\scope_meas.v','vga\app\scope_ui.v') },
     @{ n = 'vga_scope_top_pix2'; tb = 'tb_vga_scope_top.v'; flags = @('-DPIX2');
        srcs = @('vga\vga_scope_top.v','vga\hal\vga_timing.v','vga\hal\vram_sdp.v','vga\hal\font_rom.v',
-                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v',
+                'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v','vga\abs\menu_layer.v',
                 'vga\app\scope_app.v','vga\app\scope_capture.v','vga\app\scope_meas.v','vga\app\scope_ui.v') },
     @{ n = 'adc_ad7606_top'; tb = 'tb_adc_ad7606_top.v'; local = @('ad7606_model.v');
        srcs = @('adc\adc_ad7606_top.v','adc\hal\adc_ad7606_spi.v','adc\abs\adc_cfg.v','adc\abs\adc_norm.v') }

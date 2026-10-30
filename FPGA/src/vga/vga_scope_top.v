@@ -33,6 +33,7 @@ module vga_scope_top #(
     parameter integer FEAT_MEAS   = 1,
     parameter integer FEAT_SCROLL = 1,
     parameter integer FEAT_UART   = 1,
+    parameter integer GEN_ENA     = 1,   // 1=内置函数发生器可用(ADC 未接) 0=走外部 ADC，信号源菜单失效
     parameter [11:0] COL_BG   = 12'h012,
     parameter [11:0] COL_GRID = 12'h151,
     parameter [11:0] COL_AXIS = 12'h2A2,
@@ -45,7 +46,11 @@ module vga_scope_top #(
     input  wire [9:0]  ch0_in,
     input  wire [9:0]  ch1_in,
     input  wire        adc_valid,   // ADC 采样有效(S2: 由 adc_top 提供)
-    input  wire        key_in,
+    input  wire [3:0]  key_n,         // {U,D,L,R} 4 个按键，低有效
+    input  wire        sw_menu,       // SW0 上升沿: 菜单开/关
+    input  wire        sw_run,        // SW1 上升沿: 运行/冻结
+    input  wire        sw_page,       // SW2 电平  : 信号源页
+    input  wire        sw_roll,       // SW3 上升沿: 滚动模式
 
     // 串口配置
     input  wire        cfg_tb_we,    input wire [15:0] cfg_tb,
@@ -62,7 +67,13 @@ module vga_scope_top #(
     output wire [11:0] vga_rgb,
     output wire        vga_hs,
     output wire        vga_vs,
-    output wire        vga_de
+    output wire        vga_de,
+    // 函数发生器设置（送到板级顶层驱动内置信号源）
+    output wire [1:0]  gen_wave,
+    output wire [2:0]  gen_freq,
+    output wire [1:0]  gen_amp,
+    output wire        menu_on_o,
+    output wire [3:0]  gen_phase     // 信号源相位档 0..9
 );
 
     //------------------------------------------------------------------
@@ -104,10 +115,28 @@ module vga_scope_top #(
     wire [DEPTH_LOG2-1:0] rd_base0, rd_base1;
     wire [1:0]  state0, state1;
 
+    // 按键配置（由 scope_app 产生）
+    wire        ch0_en, ch1_en;
+    wire [2:0]  vsc0, vsc1;
+    wire [3:0]  pos0, pos1;          // 垂直位置档位 0..9（5=居中）
+    wire        roll;
+    wire [1:0]  hzoom;               // 0=1x 1=2x 2=4x 3=全屏
+    wire        menu_page;
+    wire [3:0]  phase_idx;
+    wire [2:0]  tb_idx;
+    wire        menu_on;
+    wire [3:0]  menu_sel;
+
+    // 档位 -> 像素偏移：每档 24 像素，(5) 为居中
+    wire signed [9:0] voff0 = ($signed({6'b0, pos0}) - 10'sd5) * 10'sd24;
+    wire signed [9:0] voff1 = ($signed({6'b0, pos1}) - 10'sd5) * 10'sd24;
+
     scope_app #(
         .CLK_HZ(CLK_HZ)
     ) u_app (
-        .clk(clk), .rst(rst), .key_in(key_in),
+        .gen_ena(GEN_ENA != 0),
+        .sw_menu(sw_menu), .sw_run(sw_run), .sw_page(sw_page), .sw_roll(sw_roll),
+        .clk(clk), .rst(rst), .key_n(key_n),
         .ext_tb_we(cfg_tb_we),       .ext_tb(cfg_tb),
         .ext_run_we(cfg_run_we),     .ext_run(cfg_run),
         .ext_ten_we(cfg_ten_we),     .ext_ten(cfg_ten),
@@ -123,9 +152,17 @@ module vga_scope_top #(
         .trig_en(trig_en), .trig_mode(trig_mode), .trig_src(trig_src),
         .trig_level(trig_level), .trig_edge(trig_edge),
         .pre_trig(pre_trig), .holdoff(holdoff),
-        .scroll_en(scroll_en), .tb_idx(), .page(page), .state_o(state_o),
-        .ev_short_o(), .ev_long_o()
+        .scroll_en(scroll_en), .tb_idx(tb_idx), .page(page), .state_o(state_o),
+        .ev_short_o(), .ev_long_o(),
+        .ch0_en(ch0_en), .ch1_en(ch1_en),
+        .vs0(vsc0), .vs1(vsc1), .pos0(pos0), .pos1(pos1),
+        .roll(roll), .hzoom(hzoom), .menu_page(menu_page), .phase_idx(phase_idx),
+        .wave(gen_wave), .fsel(gen_freq), .asel(gen_amp),
+        .menu_on(menu_on), .menu_sel(menu_sel)
     );
+
+    assign menu_on_o = menu_on;
+    assign gen_phase = phase_idx;
 
     //------------------------------------------------------------------
     // APP: 采集（两通道共用参数，触发源可选 CH0/CH1）
@@ -159,18 +196,26 @@ module vga_scope_top #(
     // 读地址：触发基准 + 像素列；滚动模式改用“帧起始写指针”
     //------------------------------------------------------------------
     wire [9:0] raddr;
+
+    // 水平缩放：像素列 -> 采样地址（两个 branch 共用）
+    //   0=1:1   1=2x放大   2=4x放大   3=适应全屏(640 像素覆盖 1020 点)
+    wire [9:0] pxz = (hzoom == 2'd0) ? px[9:0] :
+                     (hzoom == 2'd1) ? {1'b0, px[9:1]} :
+                     (hzoom == 2'd2) ? {2'b00, px[9:2]} :
+                                       ((px[9:0] * 10'd51) >> 5);
+
     generate
         if (FEAT_SCROLL != 0) begin : g_scroll
             reg [DEPTH_LOG2-1:0] rd_base_s;
             always @(posedge clk) begin
-                if (rst)                    rd_base_s <= {DEPTH_LOG2{1'b0}};
-                else if (frame)             rd_base_s <= wa0;
+                if (rst)        rd_base_s <= {DEPTH_LOG2{1'b0}};
+                else if (frame) rd_base_s <= wa0;
             end
-            assign raddr = scroll_en ? (rd_base_s - 10'd640 + px[9:0])
-                                     : (rd_base0 + px[9:0]);
+            assign raddr = scroll_en ? (rd_base_s - 10'd640 + pxz)
+                                     : (rd_base0 + pxz);
         end
         else begin : g_noscroll
-            assign raddr = rd_base0 + px[9:0];
+            assign raddr = rd_base0 + pxz;
         end
     endgenerate
 
@@ -245,20 +290,26 @@ module vga_scope_top #(
 
     trace_layer #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH0)
-    ) u_tr0 (.px(px_d), .py(py_d), .de(de_d), .en(1'b1),
-             .s_now(s0), .s_prev(s0_prev), .hit(t0_hit), .color(t0_col));
+    ) u_tr0 (.px(px_d), .py(py_d), .de(de_d), .en(ch0_en),
+             .s_now(s0), .s_prev(s0_prev),
+             .vshift(vsc0), .voff(voff0), .hit(t0_hit), .color(t0_col));
 
     trace_layer #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH1)
-    ) u_tr1 (.px(px_d), .py(py_d), .de(de_d), .en(1'b1),
-             .s_now(s1), .s_prev(s1_prev), .hit(t1_hit), .color(t1_col));
+    ) u_tr1 (.px(px_d), .py(py_d), .de(de_d), .en(ch1_en),
+             .s_now(s1), .s_prev(s1_prev),
+             .vshift(vsc1), .voff(voff1), .hit(t1_hit), .color(t1_col));
 
-    // 文本值：按 page 切换两组测量
-    wire [15:0] tv0 = page ? {6'd0, vmax}  : {6'd0, ch0_in};
-    wire [15:0] tv1 = page ? {6'd0, vmin}  : {6'd0, ch1_in};
-    wire [15:0] tv2 = page ? {6'd0, vmean} : tb_div;
-    wire [15:0] tv3 = page ? period        : {6'd0, vpp};
-    wire [15:0] tv4 = page ? {8'd0, duty}  : freq;
+    // 文本值：按 page 切换两组测量；菜单模式下锁定第 1 页显示"项号 + 当前值"
+    wire        page_eff = menu_on ? 1'b0 : page;
+
+    wire [15:0] menu_val = {12'd0, menu_sel};
+
+    wire [15:0] tv0 = menu_on ? {13'd0, menu_sel} : (page ? {6'd0, vmax}  : {6'd0, ch0_in});
+    wire [15:0] tv1 = menu_on ? menu_val          : (page ? {6'd0, vmin}  : {6'd0, ch1_in});
+    wire [15:0] tv2 = menu_on ? 16'd0             : (page ? {6'd0, vmean} : tb_div);
+    wire [15:0] tv3 = menu_on ? 16'd0 : (page ? period        : {6'd0, vpp});
+    wire [15:0] tv4 = menu_on ? 16'd0 : (page ? {8'd0, duty}  : freq);
 
     wire        tx_hit;
     wire [11:0] tx_col;
@@ -266,19 +317,40 @@ module vga_scope_top #(
     text_layer #(
         .TEXT_Y0(TEXT_Y0), .TEXT_X0(TEXT_X0), .COLS(32), .COL(COL_TEXT)
     ) u_text (
-        .px(px_d), .py(py_d), .de(de_d), .page(page),
+        .px(px_d), .py(py_d), .de(de_d), .page(page_eff),
         .val0(tv0), .val1(tv1), .val2(tv2), .val3(tv3), .val4(tv4),
         .hit(tx_hit), .color(tx_col)
     );
 
-    wire [11:0] rgb_comb;
+    wire [11:0] rgb_comp;
     compositor u_comp (
         .txt_hit(tx_hit), .txt_col(tx_col),
         .ch1_hit(t1_hit), .ch1_col(t1_col),
         .ch0_hit(t0_hit), .ch0_col(t0_col),
         .grid_hit(g_hit), .grid_col(g_col),
-        .bg_col(COL_BG), .rgb(rgb_comb)
+        .bg_col(COL_BG), .rgb(rgb_comp)
     );
+
+    //------------------------------------------------------------------
+    // 菜单 OSD（最高优先级，盖在所有图层之上）
+    //------------------------------------------------------------------
+    wire        menu_hit;
+    wire [11:0] menu_col;
+
+    menu_layer u_menu (
+        .px(px_d), .py(py_d), .de(de_d),
+        .on(menu_on), .sel(menu_sel), .page(menu_page), .ena_sig(GEN_ENA != 0),
+        .v0({3'd0, ch0_en}), .v1({3'd0, ch1_en}),
+        .v2({1'b0, vsc0}),   .v3({1'b0, vsc1}),
+        .v4(pos0),           .v5(pos1),
+        .v6({2'd0, hzoom}),  .v7({1'b0, tb_idx}),
+        .v8({3'd0, roll}),
+        .w0({2'd0, gen_wave}), .w1({1'b0, gen_freq}),
+        .w2({2'd0, gen_amp}),  .w3(phase_idx),
+        .hit(menu_hit), .color(menu_col)
+    );
+
+    wire [11:0] rgb_comb = menu_hit ? menu_col : rgb_comp;
 
     //------------------------------------------------------------------
     // 输出寄存（2 拍 = 1 像素对齐）
