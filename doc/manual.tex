@@ -9,7 +9,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small SparkRoad-V 数字存储示波器}
-\fancyhead[R]{\small 产品使用手册 \quad v1.0}
+\fancyhead[R]{\small 产品使用手册 \quad v1.2}
 \fancyfoot[C]{\small \thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0pt}
@@ -26,13 +26,13 @@
 \begin{tabular}{rl}
 \toprule
 产品型号 & \sig{SPARKROAD-V-SCOPE}（EG4S20BG256 平台）\\
-固件版本 & v1.0（P1：4 键操作 + 内置函数发生器）\\
+固件版本 & v1.2（4 键 + 4 拨动开关 + 双页菜单 + 信号源）\\
 显示输出 & VGA 640$\times$480 @ 60\,Hz\\
 输入通道 & CH0 / CH1（AD7606，16\,bit，200\,kSa/s）\\
 采样深度 & 1024 点 / 通道\\
 内置信号源 & 正弦 / 方波 / 三角 / 锯齿，8 档频率，4 档幅度\\
-操作方式 & 4 个功能按键 + 串口命令\\
-文档版本 & 1.0\\
+操作方式 & 4 个功能按键 + 4 个拨动开关 + 串口命令\\
+文档版本 & 1.2\\
 日期 & 2026 年 10 月\\
 \bottomrule
 \end{tabular}
@@ -83,6 +83,7 @@ VGA 直出 & 640$\times$480，行频 31.5\,kHz，场频 60.0\,Hz（片内 PLL �
 \midrule
 VGA 输出 & 板载 VGA 座 & 接显示器，建议 640$\times$480 或更高分辨率\\
 按键 L/R/U/D & 板载 4 个按键 & 见第 \ref{sec:key} 节\\
+拨动开关 SW0$\sim$SW3 & 板载 16 个开关的前 4 个 & 分摊常用功能，见第 \ref{sec:sw} 节\\
 复位键 C & 板载 & 按下即整机复位（所有设置回到默认）\\
 数码管 & 板载 4 位 & 显示 ADC 原始值\\
 ADC 接口 & 2$\times$10 排针 & 接 AD7606 模块，未接时请使用内置信号源\\
@@ -285,6 +286,32 @@ R & 滚动模式 开 / 关 & 纸带式连续左移显示\\
 \begin{tipbox}
 菜单项 6、7 只有在\textbf{未接 AD7606}（使用内置信号源）时才影响波形。
 接入外部 ADC 后，波形来自 AD7606，这两项不再起作用。
+\end{tipbox}
+
+\subsection{拨动开关}
+\label{sec:sw}
+
+板上共有 16 个拨动开关（SW0$\sim$SW15），本固件使用前 4 个，用来\textbf{分摊原本需要长按的功能}。
+开关都经过 8\,ms 消抖，拨动时不会因触点抖动而误触发。
+
+\begin{center}
+\small
+\begin{tabular}{lllll}
+\toprule
+开关 & 引脚 & 功能 & 触发方式 & 替代的长按\\
+\midrule
+SW0 & T4 & 菜单 开 / 关 & 拨动边沿 & 长按 U\\
+SW1 & R5 & 运行 / 冻结 & 拨动边沿 & 长按 D\\
+SW2 & T5 & 菜单页 切换 & \textbf{电平}（拨到哪就是哪页） & 长按 L\\
+SW3 & T6 & 滚动模式 开 / 关 & 拨动边沿 & 长按 R\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{开关与按键并存}，两种操作都有效。
+SW2 与其他三个不同：它是\textbf{电平控制}——拨到上方固定显示信号源页，拨到下方固定显示示波器页，
+而不是"拨一下换一次"。这样开关位置就直观对应页面状态。
 \end{tipbox}
 
 % ======================= 4 垂直与水平 =======================
@@ -509,6 +536,7 @@ VGA 时序 & 640$\times$480，像素时钟 25.2\,MHz，行频 31.5\,kHz，场频
 存储深度 & 1024 $\times$ 10\,bit 单口 RAM（每通道）\\
 ADC & AD7606，16\,bit，200\,kSa/s，SPI 配置 + 并行读\\
 按键 & 5 个（1 复位 + 4 功能）\\
+拨动开关 & 16 个（本固件使用 SW0$\sim$SW3）\\
 显示资源占用 & LUT 约 2600 / 19600（13\%），BRAM 4 / 64（6\%）\\
 时序余量 & 14.9\,ns（$@$25.2\,MHz）\\
 \bottomrule
@@ -524,6 +552,8 @@ ADC & AD7606，16\,bit，200\,kSa/s，SPI 配置 + 并行读\\
 版本 & 日期 & 内容\\
 \midrule
 v1.0 & 2026-10-30 & 首版：4 键操作 + 菜单 + 内置函数发生器（4 波形 / 8 频率 / 4 幅度）\\
+v1.1 & 2026-10-31 & 水平缩放独立于时基；双页菜单；信号源增加相位；ADC 模式下信号源禁用\\
+v1.2 & 2026-10-31 & 拨动开关 SW0$\sim$SW3 分摊长按功能（菜单/运行/翻页/滚动）\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -584,7 +614,7 @@ B7 & 预触发 / 保持时间界面化 & 目前只能通过串口设置 & P3\\
 \midrule
 C1 & LED 状态指示 & LED[3:0] = RUN / ROLL / TRIG / DONE；LED[4] 菜单；LED[5] PLL 锁定；LED[15:8] 作为当前采样值的电平条 & P2\\
 C2 & 数码管显示信号源参数 & 显示波形编号 / 频率档 / 相位档，便于盲操作 & P2\\
-C3 & 拨码开关扩展 & 若板上有拨码开关，可用于模式选择（如正常/调试） & P4\\
+C3 & 拨动开关扩展 & SW0$\sim$SW3 已用于菜单/运行/翻页/滚动，剩余 SW4$\sim$SW15 可扩展通道选择、时基直选等 & $\checkmark$\\
 \midrule
 \multicolumn{4}{l}{\textbf{D. 串口与通信}}\\
 \midrule
