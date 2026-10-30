@@ -41,7 +41,7 @@ ADC & AD7606 模块（8 通道 16\,bit、200\,kSPS、±5V/±10V、SPI/并口）\
 \file{adc_ad7606_top} & AD7606 串行采集 + 归一化 & 10\,bit 输出\\
 \file{vga_scope_top} & 示波器显示 & 640$\times$480，PIX\_DIV=1\\
 \file{seg} & 数码管显示 AD 码值 & 4 位动态扫描\\
-\file{uart_tx} & 每 1\,ms 上报一帧 & 16\,bit\\
+\file{uart_tx} & 默认连续发送（可参数改为 1ms 一帧） & 16\,bit\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -250,14 +250,14 @@ TD 前端分析 & 37 个源文件通过\\
 \toprule
 项目 & 结果 & 说明\\
 \midrule
-LUT & 1657 / 19600 & 8.45\%\\
-寄存器 & 848 / 19600 & 4.33\%\\
+LUT & 1632 / 19600 & 8.33\%\\
+寄存器 & 832 / 19600 & 4.24\%\\
 DSP & 6 / 29 & 20.69\%\\
 BRAM & 4 / 64 & 6.25\%（两路采样缓存 + 字模）\\
 PAD & 51 / 188 & 27.13\%\\
 时钟约束 & 41.667\,ns（24\,MHz） & \file{SparkRoad.sdc}\\
-时序 & 0 setup / 0 hold 错误 & 最小周期 20.79\,ns（约 48\,MHz）\\
-比特流 & 634\,296 字节 & \file{scope\_eg4\_59.bit}\\
+时序 & 0 setup / 0 hold 错误 & 最小周期 21.182\,ns（约 47\,MHz）\\
+比特流 & 634\,296 字节 & \file{scope\_eg4\_60.bit}\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -351,7 +351,7 @@ AD7606 模拟输入为 $\pm$10\,V（或 $\pm$5\,V），\textbf{绝对不能}直�
   \item \textbf{VGA}：应出现深蓝背景 + 网格 + 文本（第一页 AD/U/TB/VP/FR）；
         无显示先查 24\,MHz、\sig{vga_clk}、HS/VS 约束；
   \item \textbf{数码管}：应显示 AD 码值（0$\sim$1023），不亮先查位选极性；
-  \item \textbf{串口}：PC 打开 115200 串口，应能看到约 1\,ms 一帧的数据；
+  \item \textbf{串口}：PC 打开 115200 串口，应能看到连续的数据流（默认连续发送）；
   \item \textbf{ADC}：发 \sig{N1} 使能、\sig{R1} 选 ±10V，IN1 接 1\,kHz 正弦，
         波形应出现在屏幕上；
   \item \textbf{触发}：发 \sig{A1}、\sig{L200}、\sig{M1}，波形应稳定不再左右漂；

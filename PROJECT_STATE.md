@@ -1,7 +1,7 @@
 # 项目状态与交接说明（Agent Handoff）
 
 > 目的：让其他 agent 在不读完全部历史的情况下，快速理解本仓库的目标、结构、当前状态、构建方式和下一步。
-> 最后更新：2026-10-30，对应提交 46bc0f5。
+> 最后更新：2026-10-30，对应提交：当前分支最新提交（连续发送版本）。
 
 ## 0. 一句话概览
 
@@ -83,7 +83,7 @@ AD7606 其余：RANGE 悬空=±10V；STBY 接 3.3V；OS0..2 接 GND；模块 5V 
     AD7606 --> adc_ad7606_spi --> adc_norm(补码->偏移二进制->10bit) --> vga_scope_top.CH0
     vga_scope_top(640x480@~57Hz) --> RGB444 --> 每4bit复制为8bit --> VGA 引脚
                                  +--> seg 数码管显示 AD 码值
-                                 +--> uart_tx 每 1ms 上报 16bit
+                                 +--> uart_tx 默认连续发送 16bit 帧（TX_MODE=0；=1 时每 1ms 一帧）
 
 - CH1 暂接常量 512（板上无 DAC）；
 - VGA 像素时钟 = 24MHz（PIX_DIV=1），场频约 57.1Hz；
@@ -166,15 +166,15 @@ ADC 命令（adc_cmd）：R=量程、O=过采样、S=SCLK 半周期、K=采样�
 | 安装路径 | C:/Anlogic/TD_5.6.5_SP5_170.155 |
 | 器件库 | arch/eagle_s20.db（EG4S20，package EG4S20BG256） |
 | License | license/Anlogic.lic（node-locked；本机 MAC 40-A5-EF-5E-1D-40） |
-| 工程 | FPGA_TD/scope_eg4_59.al（35 源文件 + .adc + .sdc） |
+| 工程 | FPGA_TD/scope_eg4_60.al（35 源文件 + .adc + .sdc） |
 | 顶层 | sparkroad_scope_top |
-| 比特流 | FPGA_TD/eg4/bit/scope_eg4_59.bit（634,296 字节） |
+| 比特流 | FPGA_TD/eg4/bit/scope_eg4_60.bit（634,296 字节） |
 
 > TD 6.0.3（D:/FPGA）只有 PH1/PH2 器件库，不能用于 EG4；仅用于 PH1 容器工程的语法回归分析。
 
 ### 7.1 一键流程（必须在同一个 Tcl 会话）
 
-FPGA_TD/full_flow59.tcl：
+FPGA_TD/full_flow60.tcl：
 
     create_project -family eg4 -device EG4S20BG256 scope_eg4_59 .
     add_files ...（35 个源文件）
@@ -188,7 +188,7 @@ FPGA_TD/full_flow59.tcl：
 
 执行：
 
-    C:/Anlogic/TD_5.6.5_SP5_170.155/bin/td_commands_prompt.exe -nogui < full_flow59.tcl
+    C:/Anlogic/TD_5.6.5_SP5_170.155/bin/td_commands_prompt.exe -nogui < full_flow60.tcl
 
 > 注意：如果分两次会话（先 create/open，再 launch），TD 生成的运行脚本里
 > import_device 参数为空，会报 USR-8002 Cannot open file .。
@@ -198,15 +198,15 @@ FPGA_TD/full_flow59.tcl：
 
 | 项 | 结果 |
 |---|---|
-| LUT | 1657 / 19600（8.45%） |
-| 寄存器 | 848 / 19600（4.33%） |
+| LUT | 1632 / 19600（8.33%） |
+| 寄存器 | 832 / 19600（4.24%） |
 | DSP | 6 / 29（20.69%） |
 | BRAM | 4 / 64（6.25%） |
 | PAD | 51 / 188（27.13%） |
-| 时序 | 0 setup / 0 hold；最小周期 20.79ns（约 48MHz，约束 41.667ns） |
+| 时序 | 0 setup / 0 hold；最小周期 21.182ns（约 47MHz，约束 41.667ns） |
 | 比特流 | 634,296 字节 |
 
-报告位置：FPGA_TD/scope_eg4_59_Runs/phy_1/scope_eg4_59_phy.area / .timing / .tsm。
+报告位置：FPGA_TD/scope_eg4_60_Runs/phy_1/scope_eg4_59_phy.area / .timing / .tsm。
 
 ## 8. 目录与关键文件
 
@@ -214,7 +214,7 @@ FPGA_TD/full_flow59.tcl：
     FPGA/src/vga/      VGA 示波器（hal/abs/app + 3 个顶层）
     FPGA/src/adc/      ADC HAL（hal/abs/app + 2 个顶层）
     FPGA/src/sparkroad_scope_top.v   SparkRoad-V 总顶层
-    FPGA_TD/           TD 工程（5.6.5 的 scope_eg4_59.al、脚本、约束、bit）
+    FPGA_TD/           TD 工程（5.6.5 的 scope_eg4_60.al、脚本、约束、bit）
     doc/               LaTeX 文档（ch01–ch19 + baseline/）
     tools/             注释/校验/引脚生成/上位机等脚本
     README.md          对外说明
@@ -262,7 +262,7 @@ FPGA_TD/full_flow59.tcl：
 
 ## 12. 下一步（按顺序）
 
-1. 上板：TD Programmer 加载 scope_eg4_59.bit，先看 VGA；
+1. 上板：TD Programmer 加载 scope_eg4_60.bit，先看 VGA；
 2. 数码管/串口/AD7606 逐项验证（详见第 19 章 19.10）；
 3. 记录实测现象，把“首次上板实录”补进第 19 章；
 4. 视需要加 PLL（25.175MHz）、DOUTB（ch5–8）、RMS/ETS；
@@ -286,7 +286,7 @@ FPGA_TD/full_flow59.tcl：
 
 ### 重跑综合
     cd C:/Users/Administrator/Desktop/task/FPGA_TD
-    C:/Anlogic/TD_5.6.5_SP5_170.155/bin/td_commands_prompt.exe -nogui < full_flow59.tcl
+    C:/Anlogic/TD_5.6.5_SP5_170.155/bin/td_commands_prompt.exe -nogui < full_flow60.tcl
 
 ## 14. 约定
 
@@ -309,4 +309,4 @@ FPGA_TD/full_flow59.tcl：
     xelatex main.tex
 
     # 打开工程（GUI）
-    C:/Anlogic/TD_5.6.5_SP5_170.155/bin/td.exe FPGA_TD/scope_eg4_59.al
+    C:/Anlogic/TD_5.6.5_SP5_170.155/bin/td.exe FPGA_TD/scope_eg4_60.al
