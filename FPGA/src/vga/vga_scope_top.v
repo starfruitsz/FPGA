@@ -212,6 +212,24 @@ module vga_scope_top #(
     endgenerate
 
     //------------------------------------------------------------------
+    // 图层坐标对齐（修复 PIX_DIV=1 时最后一列丢失 / 网格文字左移 1 像素）
+    //   三条路径的拍数原本不一致：
+    //     网格/文字：px -> 组合逻辑      -> rgb_r  = 1 拍
+    //     波形     ：px -> BSRAM同步读 -> 组合 -> rgb_r = 2 拍
+    //     同步     ：de -> de1 -> de2             = 2 拍
+    //   PIX_DIV=2 时 px 两拍才变一次，1 拍差被吸收；PIX_DIV=1 时则暴露成 1 像素。
+    //   这里把 px/py/de 统一打一拍后送三个图层，使三条路径拍数一致。
+    //   注意：raddr 仍用未延迟的 px，因为它要配合 BSRAM 的 1 拍读延迟。
+    //------------------------------------------------------------------
+    reg [11:0] px_d, py_d;
+    reg        de_d;
+    always @(posedge clk) begin
+        px_d <= px;
+        py_d <= py;
+        de_d <= de;
+    end
+
+    //------------------------------------------------------------------
     // ABS: 图层
     //------------------------------------------------------------------
     wire        g_hit;
@@ -220,19 +238,19 @@ module vga_scope_top #(
     grid_layer #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .STEP(GRID_STEP), .AXIS_Y(AXIS_Y),
         .COL_GRID(COL_GRID), .COL_AXIS(COL_AXIS)
-    ) u_grid (.px(px), .py(py), .de(de), .hit(g_hit), .color(g_col));
+    ) u_grid (.px(px_d), .py(py_d), .de(de_d), .hit(g_hit), .color(g_col));
 
     wire t0_hit, t1_hit;
     wire [11:0] t0_col, t1_col;
 
     trace_layer #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH0)
-    ) u_tr0 (.px(px), .py(py), .de(de), .en(1'b1),
+    ) u_tr0 (.px(px_d), .py(py_d), .de(de_d), .en(1'b1),
              .s_now(s0), .s_prev(s0_prev), .hit(t0_hit), .color(t0_col));
 
     trace_layer #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH1)
-    ) u_tr1 (.px(px), .py(py), .de(de), .en(1'b1),
+    ) u_tr1 (.px(px_d), .py(py_d), .de(de_d), .en(1'b1),
              .s_now(s1), .s_prev(s1_prev), .hit(t1_hit), .color(t1_col));
 
     // 文本值：按 page 切换两组测量
@@ -248,7 +266,7 @@ module vga_scope_top #(
     text_layer #(
         .TEXT_Y0(TEXT_Y0), .TEXT_X0(TEXT_X0), .COLS(32), .COL(COL_TEXT)
     ) u_text (
-        .px(px), .py(py), .de(de), .page(page),
+        .px(px_d), .py(py_d), .de(de_d), .page(page),
         .val0(tv0), .val1(tv1), .val2(tv2), .val3(tv3), .val4(tv4),
         .hit(tx_hit), .color(tx_col)
     );
