@@ -193,8 +193,8 @@ CH1 波形 & 黄色 & \\
 \midrule
 U & 垂直放大一档 & 波形变高（档位 7$\rightarrow$2，最小 2 最高）\\
 D & 垂直缩小一档 & 波形变矮\\
-L & 时基加快一档 & 屏幕内波形周期数减少（展开）\\
-R & 时基减慢一档 & 屏幕内波形周期数增加（压缩）\\
+L & \textbf{水平放大}（1x$\rightarrow$2x$\rightarrow$4x） & \textbf{只放大已采数据，不重新采集}，画面不闪\\
+R & \textbf{水平缩小}（4x$\rightarrow$2x$\rightarrow$1x$\rightarrow$全屏） & 同上，全屏档覆盖全部 1020 个采样点\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -207,10 +207,10 @@ R & 时基减慢一档 & 屏幕内波形周期数增加（压缩）\\
 \toprule
 按键 & 功能 & 效果\\
 \midrule
-U & 进入设置菜单 & 文字区变为 \sig{AD=项号}、\sig{U=数值}\\
-D & 运行 / 停止 & 冻结画面（STOP）或恢复采集（RUN）\\
-L & 通道循环 & CH0 $\rightarrow$ CH1 $\rightarrow$ 双通道\\
-R & 切换波形 & 正弦 $\rightarrow$ 方波 $\rightarrow$ 三角 $\rightarrow$ 锯齿\\
+U & 菜单 开 / 关 & 屏幕左上角出现或收起设置面板\\
+D & 运行 / 冻结 & 冻结画面（STOP）或恢复采集（RUN）\\
+L & \textbf{切换菜单页} & \textbf{仅在菜单已打开时有效}：示波器页 $\leftrightarrow$ 信号源页\\
+R & 滚动模式 开 / 关 & 纸带式连续左移显示\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -239,23 +239,48 @@ R & 切换波形 & 正弦 $\rightarrow$ 方波 $\rightarrow$ 三角 $\rightarrow
 
 \subsection{菜单项一览}
 
+菜单共两页，长按 L 切换（仅在菜单已打开时有效）。
+\textbf{统一方向约定：U 键 = 减 / 放大 / 上移，D 键 = 增 / 缩小 / 下移。}
+
+\paragraph{第 0 页：示波器设置（9 项）}
 \begin{center}
 \small
 \begin{tabular}{clll}
 \toprule
-项号 & 功能 & 取值范围 & 说明\\
+项号 & 功能 & 取值范围 & U / D 作用\\
 \midrule
-0 & CH0 开 / 关 & 0 / 1 & 关闭后绿色轨迹消失\\
-1 & CH1 开 / 关 & 0 / 1 & 关闭后黄色轨迹消失\\
-2 & CH0 垂直档位 & 2$\sim$7 & \textbf{数值越小波形越高}，4 为默认\\
-3 & CH1 垂直档位 & 2$\sim$7 & 同上\\
-4 & CH0 垂直位置 & $-200\sim+200$ & 每步 8 像素，正数向下移\\
-5 & CH1 垂直位置 & $-200\sim+200$ & 同上\\
-6 & 波形选择 & 0$\sim$3 & 0 正弦 1 方波 2 三角 3 锯齿\\
-7 & 频率选择 & 0$\sim$7 & 1 / 5 / 10 / 50 / 100 / 500 / 1k / 2k\,Hz\\
+0 & CH0 开关 & 0 / 1 & 切换\\
+1 & CH1 开关 & 0 / 1 & 切换\\
+2 & CH0 垂直档位 (VS0) & 2$\sim$7 & U 放大 / D 缩小（数值越小波形越高）\\
+3 & CH1 垂直档位 (VS1) & 2$\sim$7 & 同上\\
+4 & CH0 垂直位置 (VP0) & 0$\sim$9，5 居中 & U 上移 / D 下移\\
+5 & CH1 垂直位置 (VP1) & 0$\sim$9，5 居中 & 同上\\
+6 & 水平缩放 (HSC) & 0$\sim$3 & 0=1x 1=2x 2=4x 3=全屏\\
+7 & 时基 (TB) & 0$\sim$6 & U 更快 / D 更慢（\textbf{会重新采集}）\\
+8 & 滚动模式 (ROL) & 0 / 1 & 开 / 关\\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\paragraph{第 1 页：信号源设置（4 项，仅未接 ADC 时可用）}
+\begin{center}
+\small
+\begin{tabular}{clll}
+\toprule
+项号 & 功能 & 取值范围 & U / D 作用\\
+\midrule
+0 & 波形 (WAV) & 0$\sim$3 & 0 正弦 1 方波 2 三角 3 锯齿\\
+1 & 频率 (FRE) & 0$\sim$7 & 1 / 5 / 10 / 50 / 100 / 500 / 1k / 2k\,Hz\\
+2 & 幅度 (ATT) & 0$\sim$3 & 100\% / 50\% / 25\% / 12.5\%\\
+3 & 相位 (PHA) & 0$\sim$9 & 每档 36$^\circ$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{接上 AD7606 后，第 1 页会整体消失}（面板只剩 9 行）。
+此时信号来自外部 ADC，内置信号源的波形/频率/幅度/相位不再起作用。
+\end{tipbox}
 
 \begin{tipbox}
 菜单项 6、7 只有在\textbf{未接 AD7606}（使用内置信号源）时才影响波形。
@@ -503,20 +528,82 @@ v1.0 & 2026-10-30 & 首版：4 键操作 + 菜单 + 内置函数发生器（4 �
 \end{tabular}
 \end{center}
 
-\section*{附：后续版本规划}
-\addcontentsline{toc}{section}{附：后续版本规划}
+\section{开发待完成清单}
+\label{sec:todo}
+
+本清单随固件迭代维护：$\checkmark$ 已完成，$\square$ 待完成。
+优先级 P1 最高（影响可用性），P4 最低（锦上添花）。
+
+\subsection*{已完成（截至固件 v1.1）}
 
 \begin{center}
 \small
-\begin{tabular}{lll}
+\begin{tabular}{p{6.2cm}cp{6.0cm}}
 \toprule
-阶段 & 计划功能 & 状态\\
+功能 & 状态 & 说明\\
 \midrule
-P2 & 触发电平虚线、触发点标记、ARMED / TRIG'D 状态指示 & 规划中\\
-P3 & AUTOSET 一键自动量程（用 Vpp / 频率反推档位） & 规划中\\
-P4 & 光标测量、Vrms、通道颜色可选 & 规划中\\
+4 键操作（短按 / 长按） & $\checkmark$ & 垂直缩放、水平缩放、运行冻结、菜单\\
+双页菜单 UI（P0 示波器 / P1 信号源） & $\checkmark$ & 黄框面板 + 选中行高亮\\
+垂直档位与垂直位置 & $\checkmark$ & 6 档缩放，9 档位置\\
+水平缩放（独立于时基） & $\checkmark$ & 1x / 2x / 4x / 全屏，不重新采集\\
+时基 / 滚动 / 运行停止 & $\checkmark$ & 三者已按概念拆开\\
+内置函数发生器 & $\checkmark$ & 4 波形 / 8 频率 / 4 幅度 / 10 档相位\\
+ADC 模式下信号源自动禁用 & $\checkmark$ & \(\sig{GEN\_ENA=0}\) 时 P1 页整体隐藏\\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\subsection*{待完成}
+
+\begin{center}
+\small
+\begin{tabular}{clp{7.0cm}c}
+\toprule
+编号 & 功能 & 说明 & 优先级\\
+\midrule
+\multicolumn{4}{l}{\textbf{A. 交互与显示}}\\
+\midrule
+A1 & 触发电平虚线 & 屏幕上用虚线标出当前触发电平位置，调电平时可直观看到 & P2\\
+A2 & 触发点标记 & 在触发位置画竖线或三角标记，配合预触发可看出触发点 & P2\\
+A3 & 采集状态指示 & 屏幕左上角显示 ARMED / TRIG'D / STOP / AUTO & P2\\
+A4 & 光标测量 & 两条可移动游标，显示 $\Delta T$ 与 $\Delta V$ & P4\\
+A5 & 通道颜色可选 & 绿 / 黄 / 青 / 品红，便于双通道区分 & P4\\
+A6 & 菜单交互增强 & 选中项闪烁、长按加速调节 & P4\\
+\midrule
+\multicolumn{4}{l}{\textbf{B. 采集与信号}}\\
+\midrule
+B1 & AUTOSET 自动量程 & 用已有 Vpp / 频率反推合适的垂直档位与时基，一键出图 & P3\\
+B2 & 双通道真并行采集 & 当前 4 通道交错写入同一 RAM，属设计缺陷，需每通道独立存储 & P3\\
+B3 & 双缓冲显示 & 消除跟踪模式下的撕裂，需 SDRAM 或乒乓半缓冲 & P4\\
+B4 & Vrms 有效值测量 & 增加平方累加电路 & P3\\
+B5 & 频率连续可调 & 目前仅 8 档，需连续相位增量 & P3\\
+B6 & 外部 ADC 实测 & 接 AD7606 后跑通全流程并验证量程/线性度 & P2\\
+B7 & 预触发 / 保持时间界面化 & 目前只能通过串口设置 & P3\\
+\midrule
+\multicolumn{4}{l}{\textbf{C. 板载资源利用}}\\
+\midrule
+C1 & LED 状态指示 & LED[3:0] = RUN / ROLL / TRIG / DONE；LED[4] 菜单；LED[5] PLL 锁定；LED[15:8] 作为当前采样值的电平条 & P2\\
+C2 & 数码管显示信号源参数 & 显示波形编号 / 频率档 / 相位档，便于盲操作 & P2\\
+C3 & 拨码开关扩展 & 若板上有拨码开关，可用于模式选择（如正常/调试） & P4\\
+\midrule
+\multicolumn{4}{l}{\textbf{D. 串口与通信}}\\
+\midrule
+D1 & 新增参数命令 & 现有 10 条命令尚未覆盖水平缩放、滚动、信号源参数 & P3\\
+D2 & 设置导出 / 状态回读 & 上位机读取当前全部配置 & P4\\
+\midrule
+\multicolumn{4}{l}{\textbf{E. 交付与文档}}\\
+\midrule
+E1 & 配置 Flash 固化 & 让设计断电不丢失，上电自动加载 & P1\\
+E2 & 手册随固件同步 & 每次固件更新后同步本手册与回归说明 & P1\\
+E3 & 按键行为回归用例 & 目前仿真是数据通路级，缺按键/菜单行为测试 & P2\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{B2（双通道并行采集）与 B3（双缓冲）是架构级改动}，
+需要修改存储结构并重新综合时序，建议在功能稳定后单独安排。
+其余项均为增量修改，可按优先级逐个交付。
+\end{tipbox}
 
 \end{document}
