@@ -34,7 +34,10 @@ module scope_capture #(
     output reg                     trig_det,     // 触发命中(单周期)
     output reg                     done,         // 本次捕获完成(单周期)
     output reg  [DEPTH_LOG2-1:0]   rd_base,      // 显示起始地址(触发点-pre_trig)
-    output reg  [1:0]              state         // 0=IDLE 1=ARMED 2=FILL 3=DONE
+    output reg  [1:0]              state,        // 0=IDLE 1=ARMED 2=FILL 3=DONE
+    // ---- 乒乓双缓冲 ----
+    output reg                     buf_wr,       // 当前正在写入的缓冲区(0/1)
+    output reg                     buf_disp      // 当前显示用的缓冲区(已采完的那半)
 );
 
     localparam [1:0] ST_IDLE  = 2'd0,
@@ -71,6 +74,8 @@ module scope_capture #(
             post_cnt <= {(DEPTH_LOG2+1){1'b0}};
             state    <= ST_IDLE;
             hold_cnt <= 16'd0;
+            buf_wr   <= 1'b0;
+            buf_disp <= 1'b0;
         end
         else begin
             trig_det <= 1'b0;
@@ -134,8 +139,10 @@ module scope_capture #(
                         waddr    <= waddr_nxt;
                         post_cnt <= post_cnt + 1'b1;
                         if (post_cnt >= (1 << DEPTH_LOG2) - 1) begin
-                            done  <= 1'b1;
-                            state <= ST_DONE;
+                            done     <= 1'b1;
+                            state    <= ST_DONE;
+                            buf_disp <= buf_wr;      // 这一半采完了，交给显示
+                            buf_wr   <= ~buf_wr;     // 下一屏写到另一半
                         end
                     end
                     else if (rate_cnt < rate_div) begin

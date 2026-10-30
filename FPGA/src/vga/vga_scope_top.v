@@ -73,7 +73,8 @@ module vga_scope_top #(
     output wire [2:0]  gen_freq,
     output wire [1:0]  gen_amp,
     output wire        menu_on_o,
-    output wire [3:0]  gen_phase     // 信号源相位档 0..9
+    output wire [3:0]  gen_phase,    // 信号源相位档 0..9
+    output wire [7:0]  dbg_status    // {done,trig,state[1:0],scroll,run,roll,menu}
 );
 
     //------------------------------------------------------------------
@@ -114,6 +115,7 @@ module vga_scope_top #(
     wire        done0, done1, trig_det0;
     wire [DEPTH_LOG2-1:0] rd_base0, rd_base1;
     wire [1:0]  state0, state1;
+    wire        buf_wr0, buf_disp0, buf_wr1, buf_disp1;
 
     // 按键配置（由 scope_app 产生）
     wire        ch0_en, ch1_en;
@@ -162,7 +164,8 @@ module vga_scope_top #(
     );
 
     assign menu_on_o = menu_on;
-    assign gen_phase = phase_idx;
+    assign gen_phase  = phase_idx;
+    assign dbg_status = {done0, trig_det0, state0, scroll_en, run, roll, menu_on};
 
     //------------------------------------------------------------------
     // APP: 采集（两通道共用参数，触发源可选 CH0/CH1）
@@ -178,7 +181,8 @@ module vga_scope_top #(
         .trig_mode(trig_mode), .trig_level(trig_level), .trig_edge(trig_edge),
         .pre_trig(pre_trig), .holdoff(holdoff),
         .we(we0), .waddr(wa0), .trig_det(trig_det0), .done(done0),
-        .rd_base(rd_base0), .state(state0)
+        .rd_base(rd_base0), .state(state0),
+        .buf_wr(buf_wr0), .buf_disp(buf_disp0)
     );
 
     scope_capture #(.DEPTH_LOG2(DEPTH_LOG2)) u_cap1 (
@@ -189,15 +193,18 @@ module vga_scope_top #(
         .trig_mode(trig_mode), .trig_level(trig_level), .trig_edge(trig_edge),
         .pre_trig(pre_trig), .holdoff(holdoff),
         .we(we1), .waddr(wa1), .trig_det(), .done(done1),
-        .rd_base(rd_base1), .state(state1)
+        .rd_base(rd_base1), .state(state1),
+        .buf_wr(buf_wr1), .buf_disp(buf_disp1)
     );
 
     //------------------------------------------------------------------
-    // 读地址：触发基准 + 像素列；滚动模式改用“帧起始写指针”
+    // 读地址：显示缓冲区 + 触发基准 + 像素列（乒乓双缓冲）
+    //   每通道 RAM 深度 2x1024：一半正在写、另一半正在显示，互不干扰，
+    //   因此跟踪模式下不再出现"新数据覆盖到哪就断在哪"的截断。
     //------------------------------------------------------------------
-    wire [9:0] raddr;
+    wire [DEPTH_LOG2:0] raddr0, raddr1;
 
-    // 水平缩放：像素列 -> 采样地址（两个 branch 共用）
+    // 水平缩放：像素列 -> 采样地址
     //   0=1:1   1=2x放大   2=4x放大   3=适应全屏(640 像素覆盖 1020 点)
     wire [9:0] pxz = (hzoom == 2'd0) ? px[9:0] :
                      (hzoom == 2'd1) ? {1'b0, px[9:1]} :
@@ -211,21 +218,26 @@ module vga_scope_top #(
                 if (rst)        rd_base_s <= {DEPTH_LOG2{1'b0}};
                 else if (frame) rd_base_s <= wa0;
             end
-            assign raddr = scroll_en ? (rd_base_s - 10'd640 + pxz)
-                                     : (rd_base0 + pxz);
+            wire [9:0] ra0 = scroll_en ? (rd_base_s - 10'd640 + pxz) : (rd_base0 + pxz);
+            wire [9:0] ra1 = scroll_en ? (rd_base_s - 10'd640 + pxz) : (rd_base1 + pxz);
+            // 滚动模式是"纸带式实时"，必须显示正在写入的那半；
+            // 触发刷新模式显示已采完的那半（乒乓双缓冲，不截断）
+            assign raddr0 = {scroll_en ? buf_wr0 : buf_disp0, ra0};
+            assign raddr1 = {scroll_en ? buf_wr1 : buf_disp1, ra1};
         end
         else begin : g_noscroll
-            assign raddr = rd_base0 + pxz;
+            assign raddr0 = {buf_disp0, (rd_base0 + pxz)};
+            assign raddr1 = {buf_disp1, (rd_base1 + pxz)};
         end
     endgenerate
 
-    vram_sdp #(.DW(10), .AW(DEPTH_LOG2)) u_ram0 (
-        .clk(clk), .we(we0), .waddr(wa0), .wdata(ch0_in),
-        .raddr(raddr), .rdata(s0)
+    vram_sdp #(.DW(10), .AW(DEPTH_LOG2+1)) u_ram0 (
+        .clk(clk), .we(we0), .waddr({buf_wr0, wa0}), .wdata(ch0_in),
+        .raddr(raddr0), .rdata(s0)
     );
-    vram_sdp #(.DW(10), .AW(DEPTH_LOG2)) u_ram1 (
-        .clk(clk), .we(we1), .waddr(wa1), .wdata(ch1_in),
-        .raddr(raddr), .rdata(s1)
+    vram_sdp #(.DW(10), .AW(DEPTH_LOG2+1)) u_ram1 (
+        .clk(clk), .we(we1), .waddr({buf_wr1, wa1}), .wdata(ch1_in),
+        .raddr(raddr1), .rdata(s1)
     );
 
     reg [9:0] s0_prev, s1_prev;

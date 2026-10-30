@@ -34,6 +34,7 @@ module sparkroad_scope_top #(
     // 数码管
     output wire [7:0]  seg,
     output wire [3:0]  sel,
+    output wire [15:0] led,          // LED0..15，低电平点亮
     // AD7606 (串行模式)
     output wire        ad7606_convst,
     input  wire        ad7606_busy,
@@ -159,6 +160,7 @@ module sparkroad_scope_top #(
     wire [1:0] gen_amp;
     wire       menu_on;
     wire [3:0] gen_phase;
+    wire [7:0] dbg_status;
 
     // 演示信号源（DEMO_SINE=1 时不接 ADC，用内置函数发生器给示波器灌信号）
     //   上电后自动下发一次 T0 / A1 / M1 / L512：
@@ -245,7 +247,8 @@ module sparkroad_scope_top #(
         .gen_freq  (gen_freq),
         .gen_amp   (gen_amp),
         .menu_on_o (menu_on),
-        .gen_phase (gen_phase)
+        .gen_phase (gen_phase),
+        .dbg_status(dbg_status)
     );
 
     // RGB444 -> RGB888（每 4bit 复制一次，满量程）
@@ -309,5 +312,47 @@ module sparkroad_scope_top #(
         .pi_flag  (tx_req),
         .tx       (uart_tx)
     );
+
+    //------------------------------------------------------------------
+    // LED 调试指示（16 个，低电平点亮）
+    //   LED[15:8] = 当前采样值高 8 位（电平条，一眼看出信号在不在动）
+    //   LED[7]    = 运行
+    //   LED[6]    = 滚动模式
+    //   LED[5]    = 菜单打开
+    //   LED[4]    = 触发命中（展宽 0.2s）
+    //   LED[3]    = 采集完成（展宽 0.2s）
+    //   LED[2:1]  = 采集状态 0=IDLE 1=ARMED 2=FILL 3=DONE
+    //   LED[0]    = 信号源使能(演示模式)
+    //------------------------------------------------------------------
+    localparam integer STRETCH = CLK_HZ / 5;      // 0.2 秒
+    reg [23:0] trig_cnt, done_cnt;
+    reg        trig_hi,  done_hi;
+
+    always @(posedge clk) begin
+        if (rst) begin
+            trig_cnt <= 24'd0;  trig_hi <= 1'b0;
+            done_cnt <= 24'd0;  done_hi <= 1'b0;
+        end
+        else begin
+            if (dbg_status[6]) begin trig_cnt <= STRETCH[23:0]; trig_hi <= 1'b1; end
+            else if (trig_cnt != 0) begin trig_cnt <= trig_cnt - 24'd1; end
+            else               trig_hi <= 1'b0;
+
+            if (dbg_status[7]) begin done_cnt <= STRETCH[23:0]; done_hi <= 1'b1; end
+            else if (done_cnt != 0) begin done_cnt <= done_cnt - 24'd1; end
+            else               done_hi <= 1'b0;
+        end
+    end
+
+    wire [15:0] led_map = { scope_ch0[9:2],  // 15:8 电平条
+                            dbg_status[2],   // 7 运行
+                            dbg_status[3],   // 6 滚动
+                            dbg_status[0],   // 5 菜单
+                            trig_hi,         // 4 触发命中
+                            done_hi,         // 3 采集完成
+                            dbg_status[5:4], // 2:1 采集状态
+                            (DEMO_SINE != 0) }; // 0 信号源使能
+
+    assign led = ~led_map;                // 低电平点亮
 
 endmodule

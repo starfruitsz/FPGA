@@ -97,7 +97,7 @@ module tb_scope_trigger;
         base = dut.rd_base0;
         bad = 0;
         for (k = 0; k < 640; k = k + 1) begin
-            v = dut.u_ram0.mem[(base + k) & 1023];
+            v = dut.u_ram0.mem[((base + k) & 1023) + (dut.buf_disp0 ? 1024 : 0)];  // 乒乓缓冲
             expect_v = ((k % 90) < 45) ? 800 : 200;
             if (v != expect_v) begin
                 if (bad < 6) $display("     不匹配 k=%0d got=%0d expect=%0d", k, v, expect_v);
@@ -115,7 +115,7 @@ module tb_scope_trigger;
         base = dut.rd_base0;
         bad = 0;
         for (k = 0; k < 640; k = k + 1) begin
-            v = dut.u_ram0.mem[(base + k) & 1023];
+            v = dut.u_ram0.mem[((base + k) & 1023) + (dut.buf_disp0 ? 1024 : 0)];  // 乒乓缓冲
             expect_v = ((k % 90) < 45) ? 800 : 200;
             if (v != expect_v) bad = bad + 1;
         end
