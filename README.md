@@ -71,7 +71,9 @@ Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj
 - 应用层只认 `s_data / s_ch / s_valid / s_ready`，换型号只改 `IMPL` 与 `hal/` 下驱动；
 - 量程、过采样、SCLK、采样率均可通过 CSR/串口在线配置（`adc_cmd`：R/O/S/K/N）；
 - `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
-  本机 TD 6.0.3 无 Eagle 器件库，打开会报 `Unknown device name`，详见 `FPGA_TD/eg4/README.md`。
+- `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
+  已安装 **TD 5.6.5 SP5**（`C:\Anlogic\TD_5.6.5_SP5_170.155`，含 `arch/eagle_20.db`），
+  新工程 `FPGA_TD/scope_eg4.al` 可打开并分析 35 个文件；综合需 `license/Anlogic.lic`（本机 MAC `40-A5-EF-5E-1D-40`），仍在申请。
 
 ## 1.3 SparkRoad-V（EG4S20BG256）移植（新增）
 
