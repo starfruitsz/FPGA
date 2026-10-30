@@ -9,6 +9,13 @@
 
 > **Agent 交接**：项目全貌、构建方式、引脚、当前状态与下一步见 [PROJECT_STATE.md](PROJECT_STATE.md)。
 
+## 0. 用 VS Code 阅读代码
+
+- 打开：`code C:\Users\Administrator\Desktop\task`；
+- 预配置：`.vscode/`（Verilog 关联、排除构建产物、5 个一键任务）；
+- 阅读指南：[CODE_READING_GUIDE.md](CODE_READING_GUIDE.md)（30 分钟路线 + 文件职责 + 搜索技巧）；
+- 工程全貌：[PROJECT_STATE.md](PROJECT_STATE.md)。
+
 ## 1. 交付物清单
 
 | 交付物 | 路径 | 说明 |

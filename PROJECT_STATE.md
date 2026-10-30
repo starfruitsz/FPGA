@@ -220,6 +220,7 @@ FPGA_TD/full_flow60.tcl：
     README.md          对外说明
     FIXES.md           修复记录 P1–P13
     ADC_HAL_plan.md    ADC HAL 设计与可配置项
+    CODE_READING_GUIDE.md  VS Code 代码阅读路线/文件职责/技巧
     PROJECT_STATE.md   本文（agent 交接）
 
 关键工具：
@@ -231,6 +232,12 @@ FPGA_TD/full_flow60.tcl：
 | tools/check_vga_comments.py | 校验注释改动未改代码 |
 | tools/scope_host.py | PC 上位机（pyserial+matplotlib） |
 | tools/install_td56.ps1 | TD 5.6.5 静默安装/检查 |
+
+## 8.1 VS Code 阅读
+
+- 打开：code C:/Users/Administrator/Desktop/task；
+- 预配置 .vscode/：*.v→verilog、排除 *_Runs/impl/_remote、5 个一键任务；
+- 指南：CODE_READING_GUIDE.md（30 分钟路线 + 文件职责 + 搜索关键词）。
 
 ## 9. 文档系统
 
