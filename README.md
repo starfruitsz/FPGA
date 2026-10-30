@@ -157,6 +157,8 @@ exit
 
 ### 2.3 LaTeX 文档
 
+> 📘 **产品使用手册**（面向使用者，讲按键/菜单/功能）：[`FPGA_scope_manual.pdf`](FPGA_scope_manual.pdf)
+
 `doc/main.pdf` 共 96 页，结构：
 
 1. 工程总览（器件/工具/目录/模块树/数据流/时钟/参数）

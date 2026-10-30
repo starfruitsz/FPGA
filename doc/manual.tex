@@ -1,0 +1,522 @@
+% =====================================================================
+%  manual.tex -- SparkRoad-V 数字示波器 产品手册
+%  编译: xelatex manual.tex  (两次以生成目录)
+% =====================================================================
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+\input{style}
+
+% ---- 手册专用页眉（覆盖主文档的设置）----
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small SparkRoad-V 数字存储示波器}
+\fancyhead[R]{\small 产品使用手册 \quad v1.0}
+\fancyfoot[C]{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\begin{document}
+
+% ======================= 封面 =======================
+\begin{titlepage}
+\centering
+\vspace*{2.6cm}
+{\Huge\bfseries SparkRoad-V\\[3mm] 数字存储示波器}\\[6mm]
+{\LARGE 产品使用手册}\\[16mm]
+
+\begin{tabular}{rl}
+\toprule
+产品型号 & \sig{SPARKROAD-V-SCOPE}（EG4S20BG256 平台）\\
+固件版本 & v1.0（P1：4 键操作 + 内置函数发生器）\\
+显示输出 & VGA 640$\times$480 @ 60\,Hz\\
+输入通道 & CH0 / CH1（AD7606，16\,bit，200\,kSa/s）\\
+采样深度 & 1024 点 / 通道\\
+内置信号源 & 正弦 / 方波 / 三角 / 锯齿，8 档频率，4 档幅度\\
+操作方式 & 4 个功能按键 + 串口命令\\
+文档版本 & 1.0\\
+日期 & 2026 年 10 月\\
+\bottomrule
+\end{tabular}
+
+\vfill
+{\small 本手册面向\textbf{使用者}，只讲"怎么用"，不讲内部实现。\\
+如需了解 RTL 设计细节，请参阅《FPGA 工程代码逐层解析与注释说明》。}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+% ======================= 1 产品简介 =======================
+\section{产品简介}
+
+本产品把一块 SparkRoad-V FPGA 开发板（安路 EG4S20BG256）做成了一台
+\textbf{数字存储示波器}：采集——存储——触发——测量——显示全部在 FPGA 内部完成，
+不依赖任何外部处理器。
+
+\subsection{主要特性}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+特性 & 说明\\
+\midrule
+双通道显示 & CH0（绿）/ CH1（黄），可单独关闭任一通道\\
+VGA 直出 & 640$\times$480，行频 31.5\,kHz，场频 60.0\,Hz（片内 PLL 倍频）\\
+实时采集 & AD7606 并行接口，200\,kSa/s，10\,bit 归一化后显示\\
+触发系统 & 自动 / 正常 / 单次；上升沿 / 下降沿；电平可调；事件触发\\
+预触发 & 可设置触发点之前的采样点数，能看到触发前波形\\
+自动测量 & 峰峰值 Vpp、最大 Vmax、最小 Vmin、均值 Vavg、周期、频率、占空比\\
+内置信号源 & 无需外接信号即可自测：4 种波形 / 8 档频率 / 4 档幅度\\
+按键操作 & 4 键完成通道、垂直档位、时基、波形切换、菜单设置\\
+串口控制 & 115200 8N1，命令式配置（详见第 \ref{sec:uart} 节）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{前面板与接口}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+接口 & 位置 & 说明\\
+\midrule
+VGA 输出 & 板载 VGA 座 & 接显示器，建议 640$\times$480 或更高分辨率\\
+按键 L/R/U/D & 板载 4 个按键 & 见第 \ref{sec:key} 节\\
+复位键 C & 板载 & 按下即整机复位（所有设置回到默认）\\
+数码管 & 板载 4 位 & 显示 ADC 原始值\\
+ADC 接口 & 2$\times$10 排针 & 接 AD7606 模块，未接时请使用内置信号源\\
+USB-JTAG & 板载 & 烧写与调试\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{没有接 AD7606 也能测。}
+内置函数发生器可替代外部信号，上电即有一条 50\,Hz 正弦波显示在屏幕上，
+用于验证整条链路是否正常。
+\end{tipbox}
+
+% ======================= 2 显示界面 =======================
+\section{显示界面说明}
+
+\subsection{屏幕布局}
+
+屏幕分为两块区域：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+区域 & 像素范围 & 内容\\
+\midrule
+绘图区 & $y=0\ldots447$ & 网格、零轴、CH0 / CH1 波形\\
+文字区 & $y=448\ldots463$ & 两行状态与测量读数\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{颜色约定}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+元素 & 颜色 & 说明\\
+\midrule
+背景 & 深蓝 & \\
+网格 & 深绿 & 每 64 像素一格，共 10 列 $\times$ 7 行\\
+零轴 & 亮绿 & 屏幕垂直中心，对应 ADC 中点 512\\
+CH0 波形 & 亮绿 & 默认通道\\
+CH1 波形 & 黄色 & \\
+文字 & 白色 & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{底部文字读数}
+
+文字区每 2 秒自动翻页，两页内容如下：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+位置 & 第 1 页（时域页） & 第 2 页（测量页）\\
+\midrule
+第一行左 & \sig{AD=xxxx} 通道 0 当前值 & \sig{HI=xxxx} 最大值\\
+第一行中 & \sig{U=xxxx} 通道 1 当前值 & \sig{LO=xxxx} 最小值\\
+第一行右 & \sig{TB=xxxx} 采样分频 & \sig{AV=xxxx} 平均值\\
+第二行左 & \sig{VP=xxxx} 峰峰值 & \sig{PE=xxxx} 周期\\
+第二行右 & \sig{FR=xxxx} 频率 & \sig{DU=xxxx} 占空比\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+进入按键菜单后，屏幕会\textbf{锁定在第 1 页}，并把第一行改为
+\sig{AD=菜单项号}、\sig{U=当前值}，方便边调边看。退出菜单后恢复自动翻页。
+\end{tipbox}
+
+% ======================= 3 按键操作（核心） =======================
+\section{按键操作}
+\label{sec:key}
+
+\subsection{按键位置}
+
+板上共有 5 个按键，其中 \textbf{C 键为硬件复位}，其余 4 个为功能键：
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+按键 & 丝印 & FPGA 引脚 & 默认功能\\
+\midrule
+\textbf{U}（上） & BUTTON\_U & J13 & 垂直放大 / 进菜单\\
+\textbf{D}（下） & BUTTON\_D & G12 & 垂直缩小 / 运行停止\\
+\textbf{L}（左） & BUTTON\_L & H14 & 时基加快 / 通道循环\\
+\textbf{R}（右） & BUTTON\_R & L12 & 时基减慢 / 波形切换\\
+\textbf{C}（中） & BUTTON\_C & G11 & \textbf{复位}（不可重定义）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{正常模式（默认）}
+
+\textbf{短按}（按下后立即松开，$<0.8$\,s）：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+按键 & 功能 & 效果\\
+\midrule
+U & 垂直放大一档 & 波形变高（档位 7$\rightarrow$2，最小 2 最高）\\
+D & 垂直缩小一档 & 波形变矮\\
+L & 时基加快一档 & 屏幕内波形周期数减少（展开）\\
+R & 时基减慢一档 & 屏幕内波形周期数增加（压缩）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{长按}（按住超过 $0.8$\,s）：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+按键 & 功能 & 效果\\
+\midrule
+U & 进入设置菜单 & 文字区变为 \sig{AD=项号}、\sig{U=数值}\\
+D & 运行 / 停止 & 冻结画面（STOP）或恢复采集（RUN）\\
+L & 通道循环 & CH0 $\rightarrow$ CH1 $\rightarrow$ 双通道\\
+R & 切换波形 & 正弦 $\rightarrow$ 方波 $\rightarrow$ 三角 $\rightarrow$ 锯齿\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{按键无反应？} 请先确认是否处于菜单模式——菜单模式下短按 U/D 是"调整当前项"，
+不再执行放大/缩小。长按 U 即可退出菜单。
+\end{tipbox}
+
+\subsection{菜单模式}
+
+长按 U 进入菜单，屏幕第一行显示 \sig{AD=项号} 与 \sig{U=当前值}。
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+操作 & 作用\\
+\midrule
+短按 L / R & 左右移动光标（项号 0$\sim$7 循环）\\
+短按 U / D & 当前项数值 加 / 减\\
+长按 U & 退出菜单\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{菜单项一览}
+
+\begin{center}
+\small
+\begin{tabular}{clll}
+\toprule
+项号 & 功能 & 取值范围 & 说明\\
+\midrule
+0 & CH0 开 / 关 & 0 / 1 & 关闭后绿色轨迹消失\\
+1 & CH1 开 / 关 & 0 / 1 & 关闭后黄色轨迹消失\\
+2 & CH0 垂直档位 & 2$\sim$7 & \textbf{数值越小波形越高}，4 为默认\\
+3 & CH1 垂直档位 & 2$\sim$7 & 同上\\
+4 & CH0 垂直位置 & $-200\sim+200$ & 每步 8 像素，正数向下移\\
+5 & CH1 垂直位置 & $-200\sim+200$ & 同上\\
+6 & 波形选择 & 0$\sim$3 & 0 正弦 1 方波 2 三角 3 锯齿\\
+7 & 频率选择 & 0$\sim$7 & 1 / 5 / 10 / 50 / 100 / 500 / 1k / 2k\,Hz\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+菜单项 6、7 只有在\textbf{未接 AD7606}（使用内置信号源）时才影响波形。
+接入外部 ADC 后，波形来自 AD7606，这两项不再起作用。
+\end{tipbox}
+
+% ======================= 4 垂直与水平 =======================
+\section{垂直系统与时基}
+
+\subsection{垂直档位}
+
+屏幕垂直方向共 448 像素。默认档位（4）对应"满量程铺满屏幕"：
+
+\begin{center}
+\small
+\begin{tabular}{ccc}
+\toprule
+档位 & 相对增益 & 适用场景\\
+\midrule
+2 & $\times4$ & 小信号（只看波形顶部/底部细节）\\
+3 & $\times2$ & 中等幅度信号\\
+4 & $\times1$（默认） & 满量程显示\\
+5 & $\times0.5$ & 大幅度信号\\
+6 & $\times0.25$ & 接近满幅信号\\
+7 & $\times0.125$ & 观察是否有削顶\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{垂直位置}
+
+配合档位使用：先把波形缩小，再上下平移，即可把不同幅度的两路信号
+\textbf{分开放置}，互不重叠。CH0 与 CH1 的位置独立可调。
+
+\subsection{时基}
+
+时基决定"屏幕上 640 个点覆盖多长时间"。7 个档位循环切换：
+
+\begin{center}
+\small
+\begin{tabular}{cll}
+\toprule
+档位 & 采样分频 & 说明\\
+\midrule
+0 & 50000 & 最慢，适合看低频信号的全貌\\
+1 & 10000 & \\
+2 & 2000 & 演示用 50\,Hz 信号在这一档\\
+3 & 500 & \\
+4 & 100 & \\
+5 & 10 & \\
+6 & 1 & 最快，适合看边沿细节\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+时基单位取决于 ADC 的实际采样率。接 AD7606 后采样率固定为 200\,kSa/s，
+此时"档位 6"即每个像素一个真实采样点。
+\end{tipbox}
+
+% ======================= 5 函数发生器 =======================
+\section{内置函数发生器}
+
+未接 AD7606 时，内置信号源代替外部信号接入示波器，用于自检与演示。
+
+\subsection{规格}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 参数\\
+\midrule
+采样率 & 12\,kSa/s（与 ADC 通路同接口）\\
+波形 & 正弦、方波、三角波、锯齿波\\
+频率 & 1 / 5 / 10 / 50 / 100 / 500 / 1000 / 2000\,Hz\\
+幅度 & 100\% / 50\% / 25\% / 12.5\%（中心 512，满幅 $\pm400$）\\
+分辨率 & 10\,bit（与 ADC 归一化后一致）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{操作方法}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{切换波形}：长按 \textbf{R} 键，循环切换四种波形
+  \item \textbf{切换频率 / 幅度}：长按 \textbf{U} 进入菜单，用 L/R 选到第 6、7 项，
+        再用 U/D 调整
+  \item 波形立即生效，无需重启
+\end{enumerate}
+
+\begin{tipbox}
+\textbf{为什么频率只有 8 档？}
+档位是预先算好的相位增量表，切换时不会有任何跳变或毛刺。
+后续版本会加入连续可调（用按键长按加速/减速）。
+\end{tipbox}
+
+% ======================= 6 触发系统 =======================
+\section{触发系统}
+
+\subsection{触发模式}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+模式 & 行为 & 适用场景\\
+\midrule
+自动（AUTO） & 无触发也持续刷新 & 观察未知信号\\
+正常（NORMAL） & 只有满足触发条件才刷新 & 观察稳定周期信号\\
+单次（SINGLE） & 捕获一屏后冻结 & 抓取单次事件\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{触发参数}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+参数 & 范围 & 说明\\
+\midrule
+触发源 & CH0 / CH1 & 用哪个通道做触发判断\\
+触发边沿 & 上升 / 下降 & 有符号数在电平上下穿越时触发\\
+触发电平 & 0$\sim$1023 & 默认 512（中点）\\
+预触发点数 & 0$\sim$1023 & 触发点之前的采样点数\\
+保持时间 & 0$\sim$65535 & 两次触发之间的最小间隔\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{画面一直不更新？} 检查是否处于 SINGLE 模式且已经捕获完成——
+此时需要再次触发。短按 U/D 或按 D 长按（RUN/STOP）可重新采集。
+\end{tipbox}
+
+% ======================= 7 测量 =======================
+\section{自动测量}
+
+系统对每屏 1024 个采样点实时计算以下参数，显示在文字区（第 2 页）：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+参数 & 符号 & 说明\\
+\midrule
+峰峰值 & \sig{VP} & 最大值 $-$ 最小值\\
+最大值 & \sig{HI} & 一屏内最大采样值\\
+最小值 & \sig{LO} & 一屏内最小采样值\\
+平均值 & \sig{AV} & 一屏算术平均\\
+周期 & \sig{PE} & 相邻两次过中点的上升沿间隔\\
+频率 & \sig{FR} & 周期的倒数\\
+占空比 & \sig{DU} & 高电平时间 / 周期\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ======================= 8 串口 =======================
+\section{串口控制}
+\label{sec:uart}
+
+除按键外，还可以用串口（115200 8N1）远程配置。命令格式为
+\sig{<命令字母><十六进制参数><回车>}，例如 \sig{T1F40} 表示设置采样分频为 \sig{0x1F40}。
+
+\begin{center}
+\small
+\begin{tabular}{cll}
+\toprule
+命令 & 功能 & 参数\\
+\midrule
+\sig{T} & 设置采样分频 & 16\,bit（\sig{0} = 不分频）\\
+\sig{R} & 运行 / 停止 & \sig{0} / \sig{1}\\
+\sig{A} & 触发使能 & \sig{0} / \sig{1}\\
+\sig{L} & 触发电平 & 10\,bit\\
+\sig{E} & 触发边沿 & \sig{0} 上升 / \sig{1} 下降\\
+\sig{S} & 滚动模式 & \sig{0} / \sig{1}\\
+\sig{M} & 触发模式 & \sig{0} 自动 / \sig{1} 正常 / \sig{2} 单次\\
+\sig{C} & 触发源 & \sig{0} CH0 / \sig{1} CH1\\
+\sig{P} & 预触发点数 & 10\,bit\\
+\sig{H} & 保持时间 & 16\,bit\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+串口下发的设置\textbf{优先于按键}。若发现按键改不动某个参数，
+可能是串口刚下发过同一条命令。
+\end{tipbox}
+
+% ======================= 9 常见问题 =======================
+\section{常见问题}
+
+\begin{center}
+\small
+\begin{tabular}{p{5.2cm}p{9.2cm}}
+\toprule
+现象 & 处理办法\\
+\midrule
+屏幕全黑 & 检查 VGA 线是否插紧；确认 FPGA 已加载比特流（重新烧写或烧写到配置 Flash）\\
+画面上下不一致 / 抖动 & \textbf{先怀疑显示器}。VGA 逐行扫描，同一列所有行读同一采样地址，
+FPGA 不可能产生"上半正常、下半异常"的图像。重新插拔显示器电源；仍不行则换一台显示器\\
+画面撕裂、同一条波形出现两份 & 无双缓冲导致的正常现象。长按 D 停止采集即可冻结画面\\
+波形不动 & 处于 STOP 或 SINGLE 已捕获状态。长按 D 恢复运行\\
+按键无反应 & 可能处于菜单模式（用长按 U 退出）；或按键被串口命令覆盖\\
+波形成一条直线 & 未接 AD7606 时，检查菜单第 6/7 项是否把幅度设得太小；或时基档位不合适\\
+频率读数乱跳 & 触发不稳定。调触发电平或改用自动模式\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ======================= 附录 =======================
+\appendix
+\section{技术规格}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 参数\\
+\midrule
+FPGA & 安路 EG4S20BG256（19600 LUT，64 个 9K BRAM，4 个 PLL）\\
+系统时钟 & 24\,MHz 晶振，PLL 倍频至 25.2\,MHz\\
+VGA 时序 & 640$\times$480，像素时钟 25.2\,MHz，行频 31.5\,kHz，场频 60.00\,Hz\\
+存储深度 & 1024 $\times$ 10\,bit 单口 RAM（每通道）\\
+ADC & AD7606，16\,bit，200\,kSa/s，SPI 配置 + 并行读\\
+按键 & 5 个（1 复位 + 4 功能）\\
+显示资源占用 & LUT 约 2600 / 19600（13\%），BRAM 4 / 64（6\%）\\
+时序余量 & 14.9\,ns（$@$25.2\,MHz）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{版本历史}
+
+\begin{center}
+\small
+\begin{tabular}{llp{8.4cm}}
+\toprule
+版本 & 日期 & 内容\\
+\midrule
+v1.0 & 2026-10-30 & 首版：4 键操作 + 菜单 + 内置函数发生器（4 波形 / 8 频率 / 4 幅度）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section*{附：后续版本规划}
+\addcontentsline{toc}{section}{附：后续版本规划}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+阶段 & 计划功能 & 状态\\
+\midrule
+P2 & 触发电平虚线、触发点标记、ARMED / TRIG'D 状态指示 & 规划中\\
+P3 & AUTOSET 一键自动量程（用 Vpp / 频率反推档位） & 规划中\\
+P4 & 光标测量、Vrms、通道颜色可选 & 规划中\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}
