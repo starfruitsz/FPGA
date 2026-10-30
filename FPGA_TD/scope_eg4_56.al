@@ -2,7 +2,7 @@
 <Project Version="3" Minor="2" Path="C:/Users/Administrator/Desktop/task/FPGA_TD">
     <Project_Created_Time></Project_Created_Time>
     <TD_Version>5.6.170155</TD_Version>
-    <Name>scope_eg4</Name>
+    <Name>scope_eg4_56</Name>
     <HardWare>
         <Family>EG4</Family>
         <Device>EG4S20BG256</Device>
