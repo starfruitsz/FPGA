@@ -8,7 +8,10 @@
 在 Anlogic EG4S20BG256（SparkRoad-V 开发板）上实现一个基于 VGA 的示波器：
 外接 AD7606（8 通道 16bit 200kSPS，串行模式）采集波形，FPGA 内部完成触发/测量/图层合成，
 通过 GM7123（24bit VGA）显示；串口支持在线配置。工程已用 TD 5.6.5 完成综合、布局布线与比特流生成，
-**尚未上板验证**。
+**已完成首次上板验证（2026-10-30，VGA 显示与 50 Hz 正弦演示正常）**。
+
+> 上板踩坑记录：显示器 scaler 卡死会导致「上半正常、下半抖动」，重新插拔显示器电源即可；
+> JTAG 线被绑定到通用 WinUSB 时 TD 会报 `PRG-9505`，需装 TD 自带 `anlocyusb` 驱动。详见第 19 章。
 
 ## 1. 仓库与分支
 
@@ -222,7 +225,7 @@ FPGA_TD/full_flow60.tcl：
     FPGA/src/sparkroad_scope_top.v   SparkRoad-V 总顶层
     FPGA_TD/           TD 工程（5.6.5 的 scope_eg4_60.al、脚本、约束、bit）
     doc/               LaTeX 文档（ch01–ch20 + baseline/）
-    sim/               RTL 仿真（Icarus）：13 个 testbench + run_all.ps1 + 波形出图 + PLL 空壳
+    sim/               RTL 仿真（Icarus）：14 个 testbench + run_all.ps1 + 波形出图 + PLL 空壳
     tools/             注释/校验/引脚生成/上位机等脚本
     README.md          对外说明
     FIXES.md           修复记录 P1–P13
@@ -261,8 +264,8 @@ FPGA_TD/full_flow60.tcl：
 | 综合/布局布线/比特流 | 通过（见 7.2） |
 | 端口静态检查 | 35 模块 / 47 例化 / 0 错误 |
 | 引脚约束 | 20 信号 / 51 引脚，无重复 |
-| 仿真 | 已建立（Icarus Verilog 14，13 用例全过，含整机 `sparkroad_scope_top`，见 `sim/` 与第 20 章） |
-| 上板 | 未做（下一步） |
+| 仿真 | 已建立（Icarus Verilog 14，14 用例全过，含整机 `sparkroad_scope_top`，见 `sim/` 与第 20 章） |
+| 上板 | ✅ 已完成（2026-10-30）：JTAG 下载通过、VGA 640×480@60Hz 正常、内部 50Hz 正弦稳定显示；详见第 19 章「首次上板实录」 |
 
 ## 11. 已知限制与风险
 

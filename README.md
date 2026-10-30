@@ -27,9 +27,9 @@ powershell -Command "Invoke-WebRequest -Uri 'https://bleyer.org/icarus/iverilog-
 $env:TEMP\iv.exe /S
 C:\iverilog\bin\iverilog.exe -V
 
-# 跑全部回归（13 个用例）
+# 跑全部回归（14 个用例）
 powershell -ExecutionPolicy Bypass -File .\sim\run_all.ps1
-# 期望: TOTAL: PASS=13  FAIL=0  SKIP=0
+# 期望: TOTAL: PASS=14  FAIL=0  SKIP=0
 ```
 
 要点：

@@ -25,7 +25,7 @@ C:\iverilog\bin\vvp.exe -n sim\_build\adc.vvp
 `tb_vga_timing` 要跑满一整场（16.8 ms@50 MHz），全量 dump 会到 100 MB+，默认关闭，
 需要时加 plusarg：`vvp -n xxx.vvp +vcd`。
 
-## 2. 当前用例（13/13 PASS）
+## 2. 当前用例（14/14 PASS）
 
 | 用例 | 被测模块 | 验证内容 | 结果 |
 |---|---|---|---|

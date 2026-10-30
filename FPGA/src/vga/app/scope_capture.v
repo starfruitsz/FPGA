@@ -113,6 +113,15 @@ module scope_capture #(
                             state    <= (trig_mode == 2'd0) ? ST_ARMED : ST_FILL;
                         end
                     end
+                    // 采样分频计数：计到 rate_div 后保持，等下一个有效采样点再清零。
+                    // 修复前这里没有任何自增，导致 rate_div>0 时永远采不到样。
+                    // 若运行中把 rate_div 改小（例如 T0），计数器必须回落，否则会卡死。
+                    else if (rate_cnt < rate_div) begin
+                        rate_cnt <= rate_cnt + 16'd1;
+                    end
+                    else if (rate_cnt > rate_div) begin
+                        rate_cnt <= rate_div;
+                    end
                 end
 
                 // 填充：从触发点开始再采一屏
@@ -128,6 +137,12 @@ module scope_capture #(
                             done  <= 1'b1;
                             state <= ST_DONE;
                         end
+                    end
+                    else if (rate_cnt < rate_div) begin
+                        rate_cnt <= rate_cnt + 16'd1;
+                    end
+                    else if (rate_cnt > rate_div) begin
+                        rate_cnt <= rate_div;
                     end
                 end
 

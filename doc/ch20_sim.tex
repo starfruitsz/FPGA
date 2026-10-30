@@ -1,6 +1,6 @@
 \section{RTL 仿真环境（Icarus Verilog）}
 
-本章记录本工程\textbf{从零建立仿真环境}的完整步骤、13 个回归用例（含整机仿真）、以及仿真过程中发现的缺陷。
+本章记录本工程\textbf{从零建立仿真环境}的完整步骤、14 个回归用例（含整机仿真）、以及仿真过程中发现的缺陷。
 在此之前的第 1--19 章中，"仿真"一栏始终是"未做"。
 
 \subsection{为什么用 Icarus Verilog}
@@ -60,7 +60,7 @@ C:\iverilog\bin\vvp.exe -V               REM 运行时版本
 路径 & 内容\\
 \midrule
 \file{sim/run_all.ps1} & 一键编译 + 运行全部用例，按 PASS/FAIL 汇总\\
-\file{sim/tb_*.v} & 13 个 testbench\\
+\file{sim/tb_*.v} & 14 个 testbench\\
 \file{sim/ad7606_model.v} & AD7606 串行行为模型（仅仿真，不综合）\\
 \file{sim/README.md} & 本目录的完整说明\\
 \file{sim/_build/} & 编译产物 \file{.vvp}、波形 \file{.vcd}、导出图 \file{.raw}\\
@@ -72,7 +72,7 @@ C:\iverilog\bin\vvp.exe -V               REM 运行时版本
 
 \begin{lstlisting}[style=cfgcode,numbers=none]
 powershell -ExecutionPolicy Bypass -File .\sim\run_all.ps1
-REM 期望输出最后一行:  TOTAL: PASS=13  FAIL=0  SKIP=0
+REM 期望输出最后一行:  TOTAL: PASS=14  FAIL=0  SKIP=0
 \end{lstlisting}
 
 \subsubsection{第 4 步：单独跑一个用例}

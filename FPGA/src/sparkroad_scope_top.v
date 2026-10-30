@@ -10,7 +10,8 @@
 
 module sparkroad_scope_top #(
     parameter integer CLK_HZ = 24_000_000,
-    parameter integer TX_MODE = 0        // 0=连续发送(默认) 1=每 1ms 一帧
+    parameter integer TX_MODE = 0,       // 0=连续发送(默认) 1=每 1ms 一帧
+    parameter integer DEMO_SINE = 0      // 1=用内部 50Hz 正弦替代 ADC（不接 ADC 演示用）
 )(
     // 时钟/复位/按键
     input  wire        clk,          // K14 24MHz
@@ -137,11 +138,46 @@ module sparkroad_scope_top #(
     );
 
     //------------------------------------------------------------------
+    // 演示信号源（DEMO_SINE=1 时不接 ADC，直接给示波器灌 50Hz 正弦）
+    //   上电后自动下发一次 T0 / A1 / M1 / L512：
+    //     T0    -> tb_div=0（ADC 侧已经给好采样率，前端不再分频）
+    //     A1    -> 触发使能
+    //     M2    -> single 触发模式（捕获满一屏后冻结，避免无双缓冲导致的撕裂）
+    //     L512  -> 触发电平 = 中点
+    //------------------------------------------------------------------
+    wire [9:0] sine_data;
+    wire       sine_valid;
+
+    sine_50hz #(.CLK_HZ(CLK_HZ)) u_sine (
+        .clk(clk), .rst(rst), .data(sine_data), .valid(sine_valid)
+    );
+
+    wire [9:0] scope_ch0 = DEMO_SINE ? sine_data : adc_data[9:0];
+    wire       scope_val = DEMO_SINE ? sine_valid : adc_valid;
+
+    reg [7:0] boot_cnt;
+    always @(posedge clk) begin
+        if (rst) boot_cnt <= 8'd0;
+        else if (boot_cnt != 8'hFF) boot_cnt <= boot_cnt + 8'd1;
+    end
+
+    wire demo_cfg = (DEMO_SINE != 0);
+    wire demo_tb_we    = demo_cfg && (boot_cnt == 8'd120);
+    wire demo_ten_we   = demo_cfg && (boot_cnt == 8'd130);
+    wire demo_tmode_we = demo_cfg && (boot_cnt == 8'd140);
+    wire demo_lvl_we   = demo_cfg && (boot_cnt == 8'd150);
+
+    //------------------------------------------------------------------
     // 示波器显示（VGA 640x480，24MHz 像素时钟）
     //------------------------------------------------------------------
     wire [11:0] vga_rgb;
     wire        vga_de;
 
+    //------------------------------------------------------------------
+    // 示波器显示（VGA 640x480，24MHz 像素时钟，场频 57.14Hz）
+    //   若需严格 60Hz：用 sparkroad_scope_pll 顶层（PLL 25.2MHz），时序完全标准。
+    //   注意：不要靠压缩行同步宽度去凑场频，显示器会锁不住行频。
+    //------------------------------------------------------------------
     vga_scope_top #(
         .H_VIS(640), .H_FP(16), .H_SYNC(96), .H_BP(48),
         .V_VIS(480), .V_FP(10), .V_SYNC(2), .V_BP(33),
@@ -155,17 +191,19 @@ module sparkroad_scope_top #(
     ) u_scope (
         .clk       (clk),
         .rst       (rst),
-        .ch0_in    (adc_data[9:0]),
+        .ch0_in    (scope_ch0),
         .ch1_in    (10'd512),      // 板上无 DAC，CH1 暂接中点
-        .adc_valid (adc_valid),
+        .adc_valid (scope_val),
         .key_in    (key),
-        .cfg_tb_we (cfg_tb_we),   .cfg_tb(cfg_tb),
+        .cfg_tb_we (demo_cfg ? demo_tb_we    : cfg_tb_we),    .cfg_tb(demo_cfg ? 16'd0  : cfg_tb),
         .cfg_run_we(cfg_run_we),  .cfg_run(cfg_run),
-        .cfg_ten_we(cfg_ten_we),  .cfg_ten(cfg_ten),
-        .cfg_lvl_we(cfg_lvl_we),  .cfg_lvl(cfg_lvl),
+        .cfg_ten_we(demo_cfg ? demo_ten_we   : cfg_ten_we),   .cfg_ten(demo_cfg ? 1'b1 : cfg_ten),
+        .cfg_lvl_we(demo_cfg ? demo_lvl_we   : cfg_lvl_we),   .cfg_lvl(demo_cfg ? 10'd512 : cfg_lvl),
         .cfg_edg_we(cfg_edg_we),  .cfg_edg(cfg_edg),
         .cfg_scr_we(cfg_scr_we),  .cfg_scr(cfg_scr),
-        .cfg_tmode_we(cfg_tmode_we), .cfg_tmode(cfg_tmode),
+        // 演示用 M2（single）：采一屏就冻结。用 M1(normal) 会每 85ms 重新采集，
+        // 而本设计没有双缓冲，写指针会扫过正在显示的 RAM，屏幕上出现波形撕裂/重影。
+        .cfg_tmode_we(demo_cfg ? demo_tmode_we : cfg_tmode_we), .cfg_tmode(demo_cfg ? 2'd2 : cfg_tmode),
         .cfg_tsrc_we (cfg_tsrc_we),  .cfg_tsrc(cfg_tsrc),
         .cfg_pre_we  (cfg_pre_we),   .cfg_pre(cfg_pre),
         .cfg_hold_we (cfg_hold_we),  .cfg_hold(cfg_hold),

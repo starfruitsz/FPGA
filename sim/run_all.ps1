@@ -21,6 +21,7 @@ New-Item -ItemType Directory -Force -Path $out | Out-Null
 # 用例表: 名称 / testbench / 依赖的源文件
 $cases = @(
     @{ n = 'bcd';           tb = 'tb_bcd.v';           srcs = @('bcd.v') },
+    @{ n = 'sine_50hz';     tb = 'tb_sine_50hz.v';     srcs = @('vga\\app\\sine_50hz.v') },
     @{ n = 'uart_rx';       tb = 'tb_uart_rx.v';       srcs = @('uart_rx.v') },
     @{ n = 'cmd_chain';     tb = 'tb_cmd_chain.v';
        srcs = @('uart_rx.v','vga\app\scope_cmd.v','adc\app\adc_cmd.v') },
@@ -37,7 +38,7 @@ $cases = @(
                 'vga\vga_scope_top.v','vga\hal\vga_timing.v','vga\hal\vram_sdp.v','vga\hal\font_rom.v',
                 'vga\abs\grid_layer.v','vga\abs\trace_layer.v','vga\abs\text_layer.v','vga\abs\compositor.v',
                 'vga\app\scope_app.v','vga\app\scope_capture.v','vga\app\scope_meas.v','vga\app\scope_ui.v',
-                'vga\app\scope_cmd.v',
+                'vga\app\scope_cmd.v','vga\app\sine_50hz.v',
                 'adc\adc_ad7606_top.v','adc\hal\adc_ad7606_spi.v','adc\abs\adc_cfg.v',
                 'adc\abs\adc_norm.v','adc\app\adc_cmd.v') },
     @{ n = 'vga_scope_top'; tb = 'tb_vga_scope_top.v';

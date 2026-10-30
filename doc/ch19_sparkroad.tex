@@ -473,6 +473,34 @@ R0   # ±5V（需要把模块 RANGE 接 GND，或由 RANGE 引脚驱动）
   \item 改回编译期默认：修改模块 parameter 后重新综合。
 \end{itemize}
 
+\subsection{首次上板实录（2026-10-30）}
+
+本设计于 2026-10-30 完成首次上板，用的是\textbf{不接 AD7606、内部 50\,Hz 正弦 DDS}
+的演示版本（\file{sparkroad\_scope\_demo} / \file{sparkroad\_scope\_pll}）。
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+项目 & 结果 & 备注\\
+\midrule
+JTAG 连接 & 通过 & \sig{PRG-2014 Chip validation success: EAGLE\_S20\_BG256}\\
+比特流下载 & 通过 & 6.6\,s，\sig{download -bit ... -cable 0}\\
+VGA 显示 & 通过 & 640$\times$480，PLL 25.2\,MHz，场频 60\,Hz\\
+内部 50\,Hz 正弦 & 通过 & 静态显示，约 2.7 个周期\\
+数码管 & 段码极性待查 & 消隐位被显示成 8（P16，已知问题）\\
+串口 & 未验证 & 缺 USB 转 TTL 模块\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}
+\textbf{本次最耗时的故障不是设计问题，而是显示器。}
+表现是「画面上面正常、下面剧烈抖动」。因为 VGA 逐行扫描、同一列所有行读同一
+RAM 地址，FPGA 根本不可能产生这种\textbf{空间分割}的图像——见到「上下半屏表现不同」
+就应该先怀疑显示器。最终处置：\textbf{重新插拔显示器电源}，scaler 复位，画面立即正常。
+\end{warnbox}
+
 \subsection{故障排查}
 
 \begin{center}
@@ -489,6 +517,25 @@ ADC 无数据 & SER 是否为高；BUSY/CS/SCLK/DOUTA 接线；是否发 \sig{N1
 波形不动 & RUN 是否冻结（\sig{R1}）；触发条件是否满足；采样率过低\\
 串口无响应 & 波特率 115200；TX/RX 是否交叉；是否共地\\
 触发不齐 & 触发电平/边沿设置；预触发点数；信号是否周期稳定\\
+\midrule
+\multicolumn{2}{l}{\textbf{2026-10-30 首次上板实测补充}}\\
+\midrule
+画面\textbf{上半正常、下半抖动}，改时序/场频/PLL 全部无效 &
+\textbf{显示器 scaler 异常}：先重新插拔显示器电源。注：VGA 逐行扫描，同一列在
+所有行读的是同一个 RAM 地址，FPGA 不可能产生「上半对、下半错」的空间分割——
+这类症状本身就是显示器侧的证据\\
+波形持续撕裂/重影（两条相位不同的曲线） &
+示波器\textbf{无双缓冲}：normal 模式边采集边显示，写指针会覆盖正在显示的区域。
+演示版改用 single 触发（采满一屏冻结）即可\\
+场频从 57.14\,Hz 提到 60\,Hz 后画面整幅晃动 &
+\textbf{不能靠压缩行同步}来凑场频：把 H\_SYNC 从 96 压到 58 像素(2.42\,$\mu$s) 后
+显示器锁不住行频。正确做法是用 PLL 出 25.2\,MHz（24$\times$21/20）跑标准时序\\
+TD 命令行报 \sig{PRG-9505 USB device open error} &
+JTAG 线被绑定到微软通用 WinUSB 驱动。装 TD 自带的
+\file{driver/al-link/win10/x64/anlocyusb.inf}：
+\sig{pnputil /add-driver <inf> /install}，设备会直接重绑为 Anlogic AL-Link\\
+\sig{rate\_cnt} 默认 49999 时示波器一个点都不采 &
+\file{scope\_capture.v} 的采样分频计数器缺少自增（P15，已修）\\
 \bottomrule
 \end{tabular}
 \end{center}
