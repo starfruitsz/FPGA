@@ -100,17 +100,47 @@ FPGA/src/
 
 ### P1 —— 建议先做
 
-#### E1 配置 Flash 固化
-- 目标：断电重启后自动加载，不用每次 JTAG 下载。
-- 现状：program_spi -input <bit> -cable 0 报 PRG-9514 SpiEraseSector: bit string error。
-- 已探明：需先用 create_flash_file 生成 Flash 镜像，参数 -bit1 -bit2 -output -start_addr -rom_size，但：
-  - -output 必须是 .bit/.bin/.hex（用 .flash 报错）
-  - 只给 -bit1 报 'Please specify the file to be added'
-  - 给全 -bit1 -bit2 后报 'start addr cannot cover original file region'
-  （rom_size 试过 4M/8M/16M/32M 均不行，取值语义未知）
-- 建议：直接用 TD GUI 的 Tools → Programmer → Program Flash，选 scope_eg4_p11.bit。
-- 注意：会覆盖板厂出厂 demo（文件不在仓库内）。
+#### E1 配置 Flash 固化（命令行已探到底，走 GUI）
 
+**2026-10-31 补充：命令行路径已全部试过，结论是必须用 GUI。**
+
+**已探明的 create_flash_file 语义**（这一步已经能成功）：
+
+```
+create_flash_file -bit1 <比特流1> -bit2 <比特流2> \
+                  -output <xxx.bin> -start_addr 0x100000 -rom_size 32M
+```
+- `-rom_size` 格式必须是 `4M` / `32M` 这种（`4194304`/`4096K` 都会报格式错误）
+- **`-start_addr` 指的是第二个比特流的放置地址**，不是第一个！
+  取 `0x0` 会与第一个重叠，报 `start addr cannot cover original file region`
+- `-bit1` 和 `-bit2` 都必填（只给 bit1 会报 `Please specify the file to be added`）
+- 生成的镜像结构：**32 字节头（cc 55 aa 33 …）+ 比特流从地址 0x20 开始**，
+  第二个比特流在 `start_addr` 处
+- 已生成可用镜像：`FPGA_TD/scope_eg4_p11_Runs/best_result/img2.bin`（1,680,001 字节）
+
+**但写入这一步没有 CLI 出口**：
+
+| 命令 | 结果 |
+|---|---|
+| `program_spi -input img2.bin -cable 0` | `PRG-9514 SpiEraseSector: bit string error (length=0)` |
+| `program_spi -mode program/spi/... -input ...` | 同上，`-mode` 取值无效 |
+| `program_spi -output ...` | 同上 |
+| `download -mode flash -bit/bin ...` | **只做芯片校验，不写入** |
+| `download -bin img2.bin -flashsize 32` | 实际执行 `bit_to_vec` + `program -mode svf -p`，
+  这是**写 SRAM**，不是 Flash（会把 SRAM 写坏，需重新 download -bit 恢复）|
+
+**→ 唯一可行路径：TD GUI 的 Programmer**
+
+1. 打开 TD（工程 `FPGA_TD/scope_eg4_p11.al`）
+2. 菜单 **Tools → Programmer**（注意：CLI 脚本无法可靠点击 Qt 菜单，需人工操作）
+3. Cable = `USB-JTAG-Cable`
+4. Access Mode / Operation = **`Program Flash`**（不要选 Program/SRAM）
+5. File 选 `scope_eg4_p11.bit`（GUI 会自动做镜像转换）
+6. Start Address 保持默认
+7. 点 **Run**，等进度 100%
+8. 断电重上电，若不接 JTAG 也能出画面即成功
+
+**风险**：会覆盖板厂出厂 demo（文件不在仓库内）。失败可用 JTAG 重新 download 救回。
 #### E3 按键行为回归用例
 - 目标：现在仿真只测数据通路，按键/菜单/开关行为无自动化测试。
 - 做法：写 sim/tb_key_menu.v，实例化 scope_app，直接驱动 key_n / sw_*，
