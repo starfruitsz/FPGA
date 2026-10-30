@@ -208,6 +208,12 @@ FPGA_TD/full_flow60.tcl：
 
 报告位置：FPGA_TD/scope_eg4_60_Runs/phy_1/scope_eg4_59_phy.area / .timing / .tsm。
 
+> **2026-10-30 重综合（P14，图层坐标对齐修复）**：工程 `scope_eg4_61`，
+> LUT 1645/19600、REG 857（+25，与 12+12+1 完全吻合）、DSP 6/29、BRAM 4/64、
+> PAD 51/188、setup slack +21.964 ns、0 setup / 0 hold 错误，
+> 比特流 `FPGA_TD/scope_eg4_61_Runs/best_result/scope_eg4_61.bit`（634296 B）。
+> 流程脚本 `FPGA_TD/full_flow61.tcl`。
+
 ## 8. 目录与关键文件
 
     FPGA/src/          原始高云工程 9 个手写模块 + IP + .cst/.gprj
@@ -215,7 +221,8 @@ FPGA_TD/full_flow60.tcl：
     FPGA/src/adc/      ADC HAL（hal/abs/app + 2 个顶层）
     FPGA/src/sparkroad_scope_top.v   SparkRoad-V 总顶层
     FPGA_TD/           TD 工程（5.6.5 的 scope_eg4_60.al、脚本、约束、bit）
-    doc/               LaTeX 文档（ch01–ch19 + baseline/）
+    doc/               LaTeX 文档（ch01–ch20 + baseline/）
+    sim/               RTL 仿真（Icarus）：13 个 testbench + run_all.ps1 + 波形出图 + PLL 空壳
     tools/             注释/校验/引脚生成/上位机等脚本
     README.md          对外说明
     FIXES.md           修复记录 P1–P13
@@ -254,7 +261,7 @@ FPGA_TD/full_flow60.tcl：
 | 综合/布局布线/比特流 | 通过（见 7.2） |
 | 端口静态检查 | 35 模块 / 47 例化 / 0 错误 |
 | 引脚约束 | 20 信号 / 51 引脚，无重复 |
-| 仿真 | 未做 |
+| 仿真 | 已建立（Icarus Verilog 14，13 用例全过，含整机 `sparkroad_scope_top`，见 `sim/` 与第 20 章） |
 | 上板 | 未做（下一步） |
 
 ## 11. 已知限制与风险
@@ -269,7 +276,9 @@ FPGA_TD/full_flow60.tcl：
 
 ## 12. 下一步（按顺序）
 
-1. 上板：TD Programmer 加载 scope_eg4_60.bit，先看 VGA；
+0. **上板请用新比特流** `FPGA_TD/scope_eg4_61_Runs/best_result/scope_eg4_61.bit`
+   （旧 `scope_eg4_60.bit` 对应修复前的 RTL，已作废）；
+1. 上板：TD Programmer 加载新比特流，先看 VGA；
 2. 数码管/串口/AD7606 逐项验证（详见第 19 章 19.10）；
 3. 记录实测现象，把“首次上板实录”补进第 19 章；
 4. 视需要加 PLL（25.175MHz）、DOUTB（ch5–8）、RMS/ETS；

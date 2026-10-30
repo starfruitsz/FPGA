@@ -16,6 +16,34 @@
 - 阅读指南：[CODE_READING_GUIDE.md](CODE_READING_GUIDE.md)（30 分钟路线 + 文件职责 + 搜索技巧）；
 - 工程全貌：[PROJECT_STATE.md](PROJECT_STATE.md)。
 
+## 0.5 RTL 仿真（Icarus Verilog）
+
+原工程与全部文档此前"仿真未做"。现已在 [sim/](sim) 建立回归环境，详见
+[sim/README.md](sim/README.md) 和文档**第 20 章**。
+
+```powershell
+# 一次性安装（约 26 MB，静默装到 C:\iverilog）
+powershell -Command "Invoke-WebRequest -Uri 'https://bleyer.org/icarus/iverilog-v14-20260804-x64_setup.exe' -OutFile $env:TEMP\iv.exe"
+$env:TEMP\iv.exe /S
+C:\iverilog\bin\iverilog.exe -V
+
+# 跑全部回归（13 个用例）
+powershell -ExecutionPolicy Bypass -File .\sim\run_all.ps1
+# 期望: TOTAL: PASS=13  FAIL=0  SKIP=0
+```
+
+要点：
+
+- **这是 RTL 行为级仿真**：iverilog 直接编译 `FPGA/src/**/*.v`，不经过综合；
+  验证逻辑功能与时钟级时序关系，**不验证**门延时、布线延时与建立保持时间；
+- 用例覆盖：`bcd`、`vga_timing`、`uart_tx`、`uart_rx`、`cmd_chain`（串口命令端到端）、
+  `scope_capture`、`scope_trigger`（触发锁相/滚动）、`adc_ad7606_spi`、`adc_ad7606_top`、
+  `vga_scope_top`（整屏，`PIX_DIV=1/2` 两套配置）；
+- 附带 [sim/ad7606_model.v](sim/ad7606_model.v)（AD7606 串行行为模型）
+  和 [sim/tb_dump.v](sim/tb_dump.v)（把真实输出像素导出成 PNG）；
+- 仿真抓到的缺陷见 [sim/README.md](sim/README.md) 第 5 节，其中 `PIX_DIV=1` 的
+  "最后一列丢失"已修复并重新综合为 `scope_eg4_61.bit`。
+
 ## 1. 交付物清单
 
 | 交付物 | 路径 | 说明 |
@@ -25,8 +53,8 @@
 | 建立工程脚本 | `FPGA_TD/make_prj.tcl` | 可重复执行，重建容器工程 |
 | 注释后源码 | `FPGA/src/**` | 17 个文件，仅新增 `//` 注释 |
 | 原始源码备份 | `FPGA/src_original_backup/**` | 注释前的逐字节副本 |
-| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 19 章（ch01–ch19）+ main/style/appendix |
-| 最终 PDF | `FPGA_project_analysis.pdf`（131 页） | 与 `doc/main.pdf` 相同；第 17–19 章：修复记录 / 示波器 v2 / SparkRoad 移植 |
+| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 20 章（ch01–ch20）+ main/style/appendix |
+| 最终 PDF | `FPGA_project_analysis.pdf`（139 页） | 与 `doc/main.pdf` 相同；第 17–19 章：修复记录 / 示波器 v2 / SparkRoad 移植；第 20 章：RTL 仿真环境 |
 | TD 打开截图 | `TD_open_project.jpg` | 层次树已识别 adda(7)/Gowin_PLL(1)/fifo_top(4) |
 | **VGA 示波器（分层）** | `FPGA/src/vga/**` | HAL/抽象/应用三层，引脚表与时基可配 |
 | VGA 屏幕预览 | `FPGA/src/vga/preview_640x480.png` | 用 Python 复现渲染结果的效果图 |
