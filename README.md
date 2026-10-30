@@ -67,19 +67,23 @@ Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj
 
 ## 1.2 ADC 硬件抽象层与 EG4 工程（新增）
 
-- `src/adc/`：HAL（stub/并行/SPI 模板）+ ABS（归一化/CSR）+ 工厂 `adc_top`；
+- `src/adc/`：HAL（stub/并行/SPI/AD7606 模板）+ ABS（归一化/CSR）+ 工厂 `adc_top`；
 - 应用层只认 `s_data / s_ch / s_valid / s_ready`，换型号只改 `IMPL` 与 `hal/` 下驱动；
-- 当前 `IMPL=1`（并行）、`RES=10`、`ALIGN=0`，行为与改造前一致；
-- `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（33 个文件、顶层 `adda_scope_top`）；
+- 量程、过采样、SCLK、采样率均可通过 CSR/串口在线配置（`adc_cmd`：R/O/S/K/N）；
+- `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
   本机 TD 6.0.3 无 Eagle 器件库，打开会报 `Unknown device name`，详见 `FPGA_TD/eg4/README.md`。
 
 ## 1.3 SparkRoad-V（EG4S20BG256）移植（新增）
 
 - 新顶层 `src/sparkroad_scope_top.v`：24MHz 时钟、VGA 24bit + `vga_clk`、AD7606(SPI) → CH0；
-- `src/adc/`：AD7606 串行驱动 + 归一化 + 运行时 CSR（量程/过采样/SCLK/采样率）+ `adc_cmd`；
 - 引脚由 `src/adc/pins/board_pins.csv` 经 `tools/gen_adc_pins.py` 生成 `FPGA_TD/eg4/SparkRoad.adc`（51 引脚）；
-- EG4 工程 `FPGA_TD/EG4S20BG256_scope.al`（37 文件，顶层 `sparkroad_scope_top`），本机 TD 缺 Eagle 器件库；
-- 报告新增第 19 章：顶层结构、时钟/VGA、约束生成、TD 工程操作、**上板步骤详解、引脚设置教程、参数设置教程、故障排查**。
+- **已按《SparkRoad 开发套件用户手册（全）》3.1.1 核对引脚**，修正三处：
+  1. 数码管为**共阳**（段低有效、位高有效），顶层对 `seg/sel` 取反；
+  2. **VGA_R 顺序**按手册 R0..R7 = K6,K3,K5,L4,M1,M2,L3,L5（官方 demo 约束顺序相反，若红色异常反转一行 CSV）；
+  3. 板载 **AD1..AD7** 是 12-bit SAR ADC 的**模拟专用引脚**，不能当数字 IO；外接 AD7606 用树莓派排针；
+- AD7606 接线（FPGA 引脚 / 40Pin 物理排针）：CA+CB=A7/3、BUSY=A8/5、CS=A10/7、SCLK=A9/8、
+  DOUTA=A5/10、RST=A6/11、SER=3.3V/1 或 17；
+- 报告第 19 章含：顶层结构、时钟/VGA、约束生成、TD 工程操作、**上板步骤、引脚教程、参数教程、故障排查、手册核对**。
 
 ## 2. 三步任务完成情况
 
