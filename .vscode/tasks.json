@@ -30,6 +30,18 @@
       "type": "shell",
       "command": "cd doc && xelatex -interaction=nonstopmode main.tex && xelatex -interaction=nonstopmode main.tex",
       "problemMatcher": []
+    },
+    {
+      "label": "6. 生成 ctags 索引 (F12 跳转)",
+      "type": "shell",
+      "command": "tools\\ctags\\ctags.exe -R --languages=Verilog --fields=+n --extras=+q -f tags FPGA/src",
+      "problemMatcher": []
+    },
+    {
+      "label": "7. 生成模块层次树 (HIERARCHY.md)",
+      "type": "shell",
+      "command": "python tools/gen_hierarchy.py",
+      "problemMatcher": []
     }
   ]
 }

@@ -45,6 +45,16 @@ Verilog-HDL/SystemVerilog、GitLens、Markdown、LaTeX Workshop、Python。
 | `adc/abs/adc_cfg.v` | CSR 0x00–0x28 |
 | `adc/app/adc_cmd.v` | ADC ASCII 命令（R/O/S/K/N） |
 
+## 3.5 可视化层次树与跨文件跳转
+
+- **层次树**：打开 `HIERARCHY.md`，按 `Ctrl+Shift+V` 预览，可看到 Mermaid 模块图 + ASCII 树；
+  修改代码后运行任务 **7. 生成模块层次树** 重新生成；
+- **跨文件跳转（F12）**：`tools/ctags/ctags.exe` 已安装，根目录 `tags` 已生成，
+  `.vscode/settings.json` 已指向它；把光标放在模块名/实例上按 `F12`（或 `Alt+F12` 预览定义）；
+  若失效：运行任务 **6. 生成 ctags 索引**，再执行 `Ctrl+Shift+P → Reload Window`；
+- **TerosHDL**：已安装，命令面板搜 `TerosHDL` 可打开 Hierarchy / Dependencies 视图；
+- `Ctrl+T` 工作区符号、`Ctrl+Shift+O` 当前文件大纲。
+
 ## 4. VS Code 使用技巧
 
 - `Ctrl+P`：按文件名跳转（如 `scope_capture.v`）；
