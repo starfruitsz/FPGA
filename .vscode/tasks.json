@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. 生成引脚约束 (CSV→.adc)",
+      "type": "shell",
+      "command": "python tools/gen_adc_pins.py",
+      "problemMatcher": []
+    },
+    {
+      "label": "2. 端口连接检查",
+      "type": "shell",
+      "command": "python tools/check_ports.py",
+      "problemMatcher": []
+    },
+    {
+      "label": "3. TD 5.6.5 打开工程",
+      "type": "shell",
+      "command": "C:\\Anlogic\\TD_5.6.5_SP5_170.155\\bin\\td.exe FPGA_TD/scope_eg4_60.al",
+      "problemMatcher": []
+    },
+    {
+      "label": "4. 重跑综合+布局布线 (full_flow60)",
+      "type": "shell",
+      "command": "C:\\Anlogic\\TD_5.6.5_SP5_170.155\\bin\\td_commands_prompt.exe -nogui < FPGA_TD/full_flow60.tcl",
+      "problemMatcher": []
+    },
+    {
+      "label": "5. 编译 LaTeX 文档",
+      "type": "shell",
+      "command": "cd doc && xelatex -interaction=nonstopmode main.tex && xelatex -interaction=nonstopmode main.tex",
+      "problemMatcher": []
+    }
+  ]
+}
