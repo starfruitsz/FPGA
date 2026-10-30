@@ -72,6 +72,45 @@ CSV 覆盖 20 个信号、51 个引脚（时钟、复位、按键、串口、VGA
 数码管、AD7606 七根线）。修改接线只改 CSV，再运行脚本重新生成；
 脚本会检查位宽匹配与引脚重复。
 
+\subsubsection{手册核对（3.1.1 资源配置表）}
+
+引脚表以《SparkRoad 开发套件用户手册（全）》3.1.1 节为准，关键项如下：
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+信号 & 引脚 & 信号 & 引脚\\
+\midrule
+CLKIN（24\,MHz） & K14 & VGA\_HS & J3\\
+BUTTON\_L & H14 & VGA\_VS & J4\\
+BUTTON\_C & G11 & VGA\_CLK & H2\\
+SEG\_A..H & E3,B3,F4,E4,F5,D3,B2,A2 & VGA\_R0..R7 & K6,K3,K5,L4,M1,M2,L3,L5\\
+DIG\_1..4 & B1,C3,C2,F3 & VGA\_G0..G7 & L1,K2,K1,J1,H3,J6,H1,H5\\
+UART\_TX / RX & F16 / E16 & VGA\_B0..B7 & G1,F1,F2,E1,G3,E2,D1,C1\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+三个容易踩坑的极性/顺序：
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{数码管共阳}：段码低电平有效、位码高电平有效。顶层已取反：
+        \begin{lstlisting}[style=vsnip]
+assign sel = ~sel_i;
+assign seg = ~seg_i;
+        \end{lstlisting}
+  \item \textbf{LED 低电平点亮}（本设计未使用 LED）；
+  \item \textbf{VGA\_R 顺序}：手册给出 R0..R7 = K6,K3,K5,L4,M1,M2,L3,L5，
+        而官方 VGA demo 的约束把 R 序反过来。本工程按手册填写；
+        若上板后发现红色亮度异常，把 \file{board_pins.csv} 的 vga\_r 一行反转即可。
+\end{itemize}
+
+另外，板上有 \textbf{AD1..AD7} 七个模拟输入（对应板载 12-bit SAR ADC，
+管脚 R16/M10/P11/L10/P12/N12/M12），它们是模拟专用引脚，不能当数字 IO 用；
+本工程使用的是外接 \textbf{AD7606} 模块，接在树莓派排针的数字 IO 上
+（A7/A8/A10/A9/A5/A6/A3）。
+
 \subsection{TD 工程操作步骤}
 
 \subsubsection{环境要求}
