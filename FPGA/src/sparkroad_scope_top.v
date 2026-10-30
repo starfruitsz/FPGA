@@ -9,7 +9,8 @@
 `timescale 1ns / 1ps
 
 module sparkroad_scope_top #(
-    parameter integer CLK_HZ = 24_000_000
+    parameter integer CLK_HZ = 24_000_000,
+    parameter integer TX_MODE = 0        // 0=连续发送(默认) 1=每 1ms 一帧
 )(
     // 时钟/复位/按键
     input  wire        clk,          // K14 24MHz
@@ -202,7 +203,7 @@ module sparkroad_scope_top #(
     assign seg = ~seg_i;
 
     //------------------------------------------------------------------
-    // 串口上报：每 1ms 发一帧(16bit)
+    // 串口上报：TX_MODE=0 连续发送(默认)；TX_MODE=1 每 1ms 一帧
     //------------------------------------------------------------------
     localparam integer SEND_DIV = CLK_HZ / 1000;
     reg [15:0] tx_cnt;
@@ -223,6 +224,8 @@ module sparkroad_scope_top #(
         end
     end
 
+    wire tx_req = (TX_MODE == 0) ? 1'b1 : tx_pulse;
+
     uart_tx #(
         .UART_BPS (115200),
         .CLK_FREQ (CLK_HZ)
@@ -230,7 +233,7 @@ module sparkroad_scope_top #(
         .sys_clk  (clk),
         .sys_rst_n(rst_n),
         .pi_data  (adc_data),
-        .pi_flag  (tx_pulse),
+        .pi_flag  (tx_req),
         .tx       (uart_tx)
     );
 

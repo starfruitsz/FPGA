@@ -31,7 +31,7 @@ module adda
 //                  计数器已加宽到 32bit, 支持更长周期
 //------------------------------------------------------------------------------
     parameter CNT_DATA_MAX = 11'd1024, 
-    parameter integer UART_MODE = 1,          // 0=连续 1=标志位
+    parameter integer UART_MODE = 0,          // 默认连续发送 0=连续 1=标志位
     parameter integer CLK_FREQ  = 50_000_000, 
     parameter integer REPORT_MS = 26,         // 上报周期(ms)
     parameter integer CNT_MAX   = (CLK_FREQ/1000)*REPORT_MS - 1
