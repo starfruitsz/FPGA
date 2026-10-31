@@ -23,13 +23,16 @@ module tb_demo_auto;
     always @(posedge clk) begin
         if (dut.u_top.u_scope.frame) begin
             frames = frames + 1;
-            $display("frame %0d: vs_auto=%0d mid=%0d vsc0_eff=%0d fine0=%0d voff0=%0d run=%b scroll=%b st=%0d",
+            $display("frame %0d: vs_auto=%0d mid0=%0d mid1=%0d vsc0_eff=%0d fine0=%0d fine1=%0d voff0=%0d voff1=%0d run=%b scroll=%b st=%0d",
                 frames,
                 dut.u_top.u_scope.u_auto.vs_out,
-                dut.u_top.u_scope.u_auto.mid_out,
+                dut.u_top.u_scope.u_auto.mid_out0,
+                dut.u_top.u_scope.u_auto.mid_out1,
                 dut.u_top.u_scope.vsc0_eff,
                 dut.u_top.u_scope.fine0,
+                dut.u_top.u_scope.fine1,
                 dut.u_top.u_scope.voff0,
+                dut.u_top.u_scope.voff1,
                 dut.u_top.u_scope.run,
                 dut.u_top.u_scope.scroll_en,
                 dut.u_top.u_scope.u_cap0.state);
