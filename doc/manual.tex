@@ -9,7 +9,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small SparkRoad-V 数字存储示波器}
-\fancyhead[R]{\small 产品使用手册 \quad v1.4}
+\fancyhead[R]{\small 产品使用手册 \quad v1.5}
 \fancyfoot[C]{\small \thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0pt}
@@ -26,7 +26,7 @@
 \begin{tabular}{rl}
 \toprule
 产品型号 & \sig{SPARKROAD-V-SCOPE}（EG4S20BG256 平台）\\
-固件版本 & v1.4（4 键短按 + 4 拨动开关 + 双页菜单 + 信号源 + LED/数码管调试）\\
+固件版本 & v1.5（4 键短按 + 4 拨动开关 + 双页菜单 + 信号源 + LED/数码管调试）\\
 显示输出 & VGA 640$\times$480 @ 60\,Hz\\
 输入通道 & CH0 / CH1（AD7606，16\,bit，200\,kSa/s）\\
 采样深度 & 1024 点 / 通道\\
@@ -589,7 +589,7 @@ v1.0 & 2026-10-30 & 首版：4 键操作 + 菜单 + 内置函数发生器（4 �
 v1.1 & 2026-10-31 & 水平缩放独立于时基；双页菜单；信号源增加相位；ADC 模式下信号源禁用\\
 v1.2 & 2026-10-31 & 拨动开关 SW0$\sim$SW3 分摊长按功能（菜单/运行/翻页/滚动）\\
 v1.3 & 2026-10-31 & 开关改为电平语义（拨上即开、拨下即关）；\textbf{移除全部长按操作}，按键只保留短按\\
-v1.4 & 2026-10-31 & 乒乓双缓冲（消除跟踪模式截断）；LED 调试指示与数码管参数显示\\
+v1.5 & 2026-10-31 & 乒乓双缓冲（消除跟踪模式截断）；LED 调试指示与数码管参数显示\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -675,3 +675,34 @@ E3 & 按键行为回归用例 & 目前仿真是数据通路级，缺按键/菜�
 \end{tipbox}
 
 \end{document}
+% ================= v1.5 增补 =================
+\section{v1.5 更新说明（P21--P29）}
+这里的改动晚于 v1.5 正文，以本节为准。
+\subsection{拨动开关（现行 9 个）}
+\begin{center}\small\begin{tabular}{lll}\toprule
+开关 & 引脚 & 功能 \\midrule
+SW0 & T4 & 菜单显示/隐藏（拨上显示） \
+SW1 & R5 & 拨上冻结、拨下运行 \
+SW2 & T5 & 菜单打开时翻页；菜单关闭时选通道（拨下CH0、拨上CH1） \
+SW3 & T6 & 已弃用（硬件无反应） \
+SW4 & M6 & 自动量程（两路共档、各自居中，保证两路都在屏内） \
+SW5 & P6 & 拨上非滚动、拨下滚动 \
+SW6 & N6 & 横轴缩放开上限（1x--256x） \
+SW7 & P8 & U/D 语义：拨上移动基线（16px/步） \
+SW8 & N8 & 拨下双信号源、拨上 AD/DA（CH0=ADC，CH1=ADRC 输出 u） \
+\bottomrule\end{tabular}\end{center}
+\subsection{按键}
+菜单关闭且 SW7 拨下：U/D 改选中通道垂直档位，L/R 水平缩放；SW7 拨上：U/D 移动基线。
+菜单打开：L/R 移光标，U/D 调值。长按 0.5\,s 后每 0.5\,s 重复一步。
+\subsection{时基与触发}
+TB 菜单 16 档（2 倍步进，25.2\,MHz 下 127\,ms/格--2.5\,us/格）。
+非滚动模式采用 AUTO 触发：连续一屏无触发也自动换页，避免新旧数据混叠。
+\subsection{并口 AD/DA 接线}
+模块 24 脚（VCC GND AD0--AD9 ADCLK DA0--DA9 DACLK），接树莓派排针：
+AD0--AD9 依次 A7/A6/C8/C5... 详见 NEXT\_SESSION.md 第 10 节接线表；
+ADCLK/DACLK 由 FPGA 输出 3.15\,MHz。
+\subsection{ADRC 调参}
+参数在 FPGA/src/eso.v 第 91--94 行（B01/B02/B03/b0，默认 90/2700/27000/5000），
+离线调参步骤见 ADRC\_TUNING.md 第 6 节：改参数 $\rightarrow$ 新建 flow 脚本 $\rightarrow$ 综合 $\rightarrow$ 烧写 $\rightarrow$ 验证。
+\subsection{版本记录}
+p21 丝滑横轴缩放；p26 ESO 流水化；p27 双通道自动量程；p28 双信号源与 SW2 通道选择；p29 AUTO 触发换页。
