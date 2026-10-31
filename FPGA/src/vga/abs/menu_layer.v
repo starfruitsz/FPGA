@@ -1,10 +1,14 @@
 //==============================================================================
-// 层: 抽象(图形层)  文件: abs/menu_layer.v   [v2: 双页菜单]
+// 层: 抽象(图形层)  文件: abs/menu_layer.v   [v3: 双页菜单，P1 扩成两套信号源参数]
 // 功能: 屏幕设置菜单（OSD），共两页
 //   第 0 页 示波器: CH0 CH1 VS0 VS1 VP0 VP1 HSC TB  ROL   (9 项)
-//   第 1 页 信号源: WAV FRE ATT PHA                       (4 项)
-//   每行格式 "[项号] XXX=值"，选中行亮底高亮，带边框。
-//   面板位于左上角 (8,8)，行高 8 像素，宽 60 像素，高度随页内项数变化。
+//   第 1 页 信号源: CH0 的 WAV/FRE/ATT/PHA + CH1 的 WAV/FRE/ATT/PHA (8 项)
+//   每行格式：
+//     P0: "[项号] LBL=值"    （7 列）
+//     P1: "[项号] cLBL=值"   （8 列，c=0/1 表示 CH0/CH1：两套参数名一样，
+//                            靠左边这一列通道号区分，避免操作时看错通道）
+//   选中行亮底高亮，带边框。面板位于左上角 (8,8)，行高 8 像素，
+//   宽 60 像素(P0)/68 像素(P1)，高度随页内项数变化。
 //==============================================================================
 `timescale 1ns / 1ps
 
@@ -17,14 +21,15 @@ module menu_layer (
     input  wire        page,       // 0=示波器 1=信号源
     input  wire        ena_sig,    // 0=外部 ADC 模式，信号源页不可用
     input  wire [3:0]  v0, v1, v2, v3, v4, v5, v6, v7, v8,   // 第 0 页 9 项
-    input  wire [3:0]  w0, w1, w2, w3,                      // 第 1 页 4 项
+    input  wire [3:0]  w0, w1, w2, w3, w4, w5, w6, w7,      // 第 1 页 8 项
     output wire        hit,
     output wire [11:0] color
 );
 
     localparam [11:0] X0 = 12'd8;
     localparam [11:0] Y0 = 12'd8;
-    localparam [11:0] W  = 12'd60;
+    localparam [11:0] W_P0 = 12'd60;   // 7 列：项号 + 空白 + 3 字标签 + '=' + 值
+    localparam [11:0] W_P1 = 12'd68;   // 8 列：多一列通道号(0/1)
 
     localparam [11:0] C_BG     = 12'h123;
     localparam [11:0] C_BORDER = 12'hCC3;
@@ -32,7 +37,8 @@ module menu_layer (
     localparam [11:0] C_TEXT   = 12'hFFF;
 
     wire       pg   = page && ena_sig;             // 信号源页仅在可用时显示
-    wire [3:0] rows = pg ? 4'd4 : 4'd9;            // 本页项数
+    wire [3:0] rows = pg ? 4'd8 : 4'd9;            // 本页项数
+    wire [11:0] W   = pg ? W_P1 : W_P0;            // 本页面板宽
     wire [11:0] H   = {2'b00, rows, 3'b000} + 12'd8;  // rows*8 + 8
 
     wire [11:0] rx = px - X0;
@@ -50,7 +56,9 @@ module menu_layer (
     wire [2:0] glyph_row = ty[2:0];
     wire [3:0] col       = tx[5:3];
     wire [2:0] glyph_col = tx[2:0];
-    wire row_ok = (row < rows) && (col < 4'd7);
+    // P0 只画 7 列(0..6)，P1 画 8 列(0..7)；多出来的列不点亮
+    wire [3:0] col_max   = pg ? 4'd7 : 4'd6;
+    wire row_ok = (row < rows) && (col <= col_max);
     wire sel_row = (row == sel);
 
     //------------------------------------------------------------------
@@ -72,11 +80,13 @@ module menu_layer (
             endcase
         end
         else begin
-            case (row)
-                4'd0: label = {6'd32, 6'd10, 6'd31};   // WAV 波形
-                4'd1: label = {6'd15, 6'd27, 6'd14};   // FRE 频率
-                4'd2: label = {6'd10, 6'd29, 6'd29};   // ATT 幅度
-                default: label = {6'd25, 6'd17, 6'd10}; // PHA 相位
+            // P1：CH0 行(0..3) 与 CH1 行(4..7) 用同一组 3 字标签，
+            //     行号低 2 位决定是哪个参数
+            case (row[1:0])
+                2'd0: label = {6'd32, 6'd10, 6'd31};   // WAV 波形
+                2'd1: label = {6'd15, 6'd27, 6'd14};   // FRE 频率
+                2'd2: label = {6'd10, 6'd29, 6'd29};   // ATT 幅度
+                default: label = {6'd25, 6'd17, 6'd10};// PHA 相位
             endcase
         end
     end
@@ -98,7 +108,9 @@ module menu_layer (
         else begin
             case (row)
                 4'd0: val = w0;  4'd1: val = w1;
-                4'd2: val = w2;  default: val = w3;
+                4'd2: val = w2;  4'd3: val = w3;
+                4'd4: val = w4;  4'd5: val = w5;
+                4'd6: val = w6;  default: val = w7;
             endcase
         end
     end
@@ -108,15 +120,31 @@ module menu_layer (
     //------------------------------------------------------------------
     reg [5:0] ch;
     always @(*) begin
-        case (col)
-            4'd0: ch = {2'b00, row};
-            4'd1: ch = 6'd37;
-            4'd2: ch = label[17:12];
-            4'd3: ch = label[11:6];
-            4'd4: ch = label[5:0];
-            4'd5: ch = 6'd36;
-            default: ch = {2'b00, val};     // 4bit 值直接取字模：0-9 数字，10-15 显示 A-F
-        endcase
+        if (!pg) begin
+            // P0: "[n] LBL=v"（7 列）
+            case (col)
+                4'd0: ch = {2'b00, row};
+                4'd1: ch = 6'd37;                   // 空白
+                4'd2: ch = label[17:12];
+                4'd3: ch = label[11:6];
+                4'd4: ch = label[5:0];
+                4'd5: ch = 6'd36;                   // '='
+                default: ch = {2'b00, val};         // 4bit 值：0-9 数字，10-15 A-F
+            endcase
+        end
+        else begin
+            // P1: "[n] cLBL=v"（8 列），c=0/1 是通道号
+            case (col)
+                4'd0: ch = {2'b00, row};
+                4'd1: ch = 6'd37;
+                4'd2: ch = row[2] ? 6'd1 : 6'd0;    // CH0=0 / CH1=1
+                4'd3: ch = label[17:12];
+                4'd4: ch = label[11:6];
+                4'd5: ch = label[5:0];
+                4'd6: ch = 6'd36;                   // '='
+                default: ch = {2'b00, val};
+            endcase
+        end
     end
 
     wire [7:0] glyph_bits;

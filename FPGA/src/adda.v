@@ -332,6 +332,8 @@ eso eso_inst
 ( 
     .ad_clk(ad_clk1), 
     .sys_rst_n(sys_rst_n), 
+    // 原工程用 ad_clk1(1kHz) 电平当时钟, 每拍都算 -> 常开使能即可
+    .en(1'b1), 
     .e_in(date_y), 
     .u_out(date_u), 
     .out_da(date_u), 

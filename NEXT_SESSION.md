@@ -10,7 +10,7 @@
 | 项 | 值 |
 |---|---|
 | 板卡 | SparkRoad-V，安路 EG4S20BG256 |
-| 当前固件 | **scope_eg4_p18.bit（2026-10-31 17:49 烧写；自动量程中点 10bit 求和溢出修复）** |
+| 当前固件 | **scope_eg4_p21.bit（2026-10-31 18:36 烧写；丝滑横轴缩放 pxz=(px*S)>>6、长按 30ms 连续、SW7 基线移动、贴边假线修复）** |
 | 比特流路径 | FPGA_TD/scope_eg4_p18_Runs/best_result/scope_eg4_p18.bit（638,952 B） |
 | 构筑脚本 | FPGA_TD/full_flow_p18.tcl（逐版递增 p1..p18） |
 | 顶层 | sparkroad_scope_pll（PLL 25.2MHz / 60Hz / 内置信号源） |

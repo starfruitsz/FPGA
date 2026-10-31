@@ -1,5 +1,5 @@
 //==============================================================================
-// 层: 应用(配置)  文件: app/scope_app.v   [v3: 4 键菜单 + 通道/垂直档位/垂直位置]
+// 层: 应用(配置)  文件: app/scope_app.v   [v4: 双路独立信号源 + 通道选择]
 // 功能:
 //   1) 寄存器: 时基 tb_div、触发使能/模式/源/电平/边沿、预触发、保持时间、滚动
 //   2) 会话状态: 0=STOP 1=IDLE 2=ARMED/FILL 3=DONE（供文本层显示）
@@ -10,16 +10,25 @@
 //        正常模式:  U=垂直放大  D=垂直缩小  L=水平放大  R=水平缩小
 //                  短按走一小步；长按 500ms 后进入连续模式，每 30ms 走
 //                  一小步（scope_ui 的 FAST_MS），按住就是丝滑连续变化
+//                  垂直放大/缩小只作用于"当前选中通道" sel_ch（由 SW2 选择）：
+//                  sel_ch=0 改 vs0、sel_ch=1 改 vs1，各自夹紧在 2..7；
+//                  SW7 拨上时 U/D 改为移动基线，优先级高于通道选择
 //        菜单模式:  L/R=移动光标  U/D=调整当前项（长按 U 仍是退出菜单，不重复）
 //   7) 横轴缩放是连续的：7bit 系数 S(1..102)，顶层按 pxz=(px*S)>>6 取采样地址。
 //      S=64 为 1:1，S 越小放大越多，S=102 约等于"适应全屏"（1024 点缓冲的上限）。
 //      L/R 与菜单 HSC 项都按乘性规则 S <- S ± S/8 调整（夹紧 1..102）。
 //   7) 开关语义：SW1 拨上=冻结、拨下=运行（v1.5 起反转）；
+//      SW2 是复用开关：菜单打开时=菜单翻页（拨上 P1 信号源页、拨下 P0 示波器页）；
+//      菜单关闭时=通道选择（拨下=CH0、拨上=CH1），选中结果记在 sel_ch，
+//      正常模式的 U/D 只调整它的垂直档位；菜单打开期间 sel_ch 保持不变。
 //      滚动状态只有一份：scroll_en。SW3 电平变化时写入，菜单 ROL 项与串口 S
 //      命令也能改；roll 只是 scroll_en 的别名（给菜单显示/LED 用）。
 //      时基仍然完全手动，滚动模式不改 tb_div（不做自动限速）。
-//      菜单项: 0=CH0开关 1=CH1开关 2=CH0档位 3=CH1档位 4=CH0位置 5=CH1位置
-//              6=波形 7=频率
+//      菜单项: P0 0=CH0开关 1=CH1开关 2=CH0档位 3=CH1档位 4=CH0位置 5=CH1位置
+//              6=HSC 7=TB 8=ROL（9 项）
+//              P1 0..3=CH0 的 WAV/FRE/ATT/PHA，4..7=CH1 的 WAV/FRE/ATT/PHA（8 项）
+//      两路信号源参数完全独立（wave0/fsel0/asel0/phase0 与 wave1/fsel1/asel1/phase1），
+//      分别驱动顶层两个 func_gen 实例；AD/DA 模式下 P1 不可用（gen_ena=0）。
 //==============================================================================
 `timescale 1ns / 1ps
 
@@ -33,7 +42,8 @@ module scope_app #(
     // ---- 拨动开关（分摊长按功能）----
     input  wire        sw_menu,      // SW0 电平: 1=菜单打开 0=关闭
     input  wire        sw_run,       // SW1 电平: 1=冻结 0=运行（v1.5 反转）
-    input  wire        sw_page,      // SW2 电平: 1=信号源页 0=示波器页
+    input  wire        sw_page,      // SW2 电平: 菜单开=1 信号源页 0 示波器页；
+                                     //           菜单关=通道选择 1=CH1 0=CH0
     input  wire        sw_roll,      // SW3 电平: 1=滚动模式 0=触发刷新
     input  wire        sw_roll2,     // SW5 电平: 滚动开关（1=非滚动 0=滚动）
     input  wire        sw_hzfree,    // SW6 电平: 1=横轴缩放不设上限(只受理论极限)
@@ -76,6 +86,8 @@ module scope_app #(
     // ---- 按键配置输出 ----
     output reg         ch0_en,
     output reg         ch1_en,
+    output reg         sel_ch,        // 选中通道 0=CH0 1=CH1：菜单关闭时由 SW2 决定，
+                                      //   正常模式下 U/D 只调整它的垂直档位
     output reg  [2:0]  vs0,           // 0..7 垂直档位（右移位数，越小波形越高）
     output reg  [2:0]  vs1,
     output reg  [3:0]  pos0,          // 垂直位置档位 0..9（5=居中）
@@ -84,10 +96,15 @@ module scope_app #(
     output reg  [6:0]  hscale,        // 横轴缩放系数 S(1..102): pxz=(px*S)>>6，64=1:1
     output reg  signed [12:0] yoff,   // 基线偏移(像素)，SW7 打开时由 U/D 调整
     output reg         menu_page,     // 0=示波器设置 1=信号源设置
-    output reg  [3:0]  phase_idx,     // 信号源相位档 0..9 (每档 36 度)
-    output reg  [1:0]  wave,          // 函数发生器波形
-    output reg  [2:0]  fsel,          // 函数发生器频率档
-    output reg  [1:0]  asel,          // 函数发生器幅度档
+    // ---- 函数发生器参数：CH0 / CH1 两套完全独立，各自驱动一个 func_gen 实例 ----
+    output reg  [1:0]  wave0,         // CH0 波形 0=正弦 1=方波 2=三角 3=锯齿
+    output reg  [2:0]  fsel0,         // CH0 频率档 0..7
+    output reg  [1:0]  asel0,         // CH0 幅度档 0..3
+    output reg  [3:0]  phase0,        // CH0 相位档 0..9（每档 36 度）
+    output reg  [1:0]  wave1,         // CH1 波形
+    output reg  [2:0]  fsel1,         // CH1 频率档 0..7
+    output reg  [1:0]  asel1,         // CH1 幅度档 0..3
+    output reg  [3:0]  phase1,        // CH1 相位档 0..9
     output reg         menu_on,
     output reg  [3:0]  menu_sel
 );
@@ -207,6 +224,11 @@ module scope_app #(
     reg boot;
     reg sw_run_d, sw_roll_d, sw_roll2_d;
 
+    // 菜单"当前生效状态"：menu_on 是打了一拍的寄存器，这里再或上 SW0 的即时电平，
+    // 于是"刚拨上 SW0"的那一拍就立刻按菜单打开处理，不会把 SW2 误当成通道选择；
+    // 拨下 SW0 后一拍 menu_on 变 0，sel_ch 才重新跟随 SW2。
+    wire menu_eff = menu_on | sw_menu;
+
     always @(posedge clk)
         if (rst) boot <= 1'b0;
         else     boot <= 1'b1;
@@ -231,6 +253,7 @@ module scope_app #(
 
             ch0_en     <= 1'b1;
             ch1_en     <= 1'b1;
+            sel_ch     <= 1'b0;        // 上电默认选中 CH0
             vs0        <= 3'd4;
             vs1        <= 3'd4;
             pos0       <= 4'd5;
@@ -238,10 +261,18 @@ module scope_app #(
             hscale     <= HSC_1X;
             yoff       <= 13'sd0;
             menu_page  <= 1'b0;
-            phase_idx  <= 4'd0;
-            wave       <= 2'd0;
-            fsel       <= 3'd3;        // 50 Hz
-            asel       <= 2'd0;        // 100%
+            // 两套信号源参数的复位值：
+            //   CH0 保持原默认（正弦 / 50Hz / 满幅 / 0 度），
+            //   CH1 默认方波 / 50Hz / 半幅 / 0 度 —— 上电就能一眼看出
+            //   两路是各自独立的函数发生器，而不是同一路复制。
+            wave0      <= 2'd0;        // 正弦
+            fsel0      <= 3'd3;        // 50 Hz
+            asel0      <= 2'd0;        // 100%
+            phase0     <= 4'd0;
+            wave1      <= 2'd1;        // 方波
+            fsel1      <= 3'd3;        // 50 Hz
+            asel1      <= 2'd1;        // 50%
+            phase1     <= 4'd0;
             menu_on    <= 1'b0;
             menu_sel   <= 4'd0;
         end
@@ -260,11 +291,25 @@ module scope_app #(
                     if (ev_ds | ev_dl | ev_dr) yoff <= (yoff <  13'sd1200) ? (yoff + 13'sd16) : yoff;
                 end
                 else begin
-                    if (ev_us | ev_ul | ev_ur) begin
-                        if (vs0 > 3'd2) vs0 <= vs0 - 3'd1;      // 放大
+                    // U/D 只改"当前选中通道"的垂直档位（sel_ch 由 SW2 选择）：
+                    //   短按 ev_*s、长按首拍 ev_*l、长按重复 ev_*r 做同一件事，
+                    //   vs 越小波形越高：U 放大（vs 减 1）、D 缩小（vs 加 1），
+                    //   两路各自夹紧在 2..7。
+                    if (!sel_ch) begin
+                        if (ev_us | ev_ul | ev_ur) begin
+                            if (vs0 > 3'd2) vs0 <= vs0 - 3'd1;  // CH0 放大
+                        end
+                        if (ev_ds | ev_dl | ev_dr) begin
+                            if (vs0 < 3'd7) vs0 <= vs0 + 3'd1;  // CH0 缩小
+                        end
                     end
-                    if (ev_ds | ev_dl | ev_dr) begin
-                        if (vs0 < 3'd7) vs0 <= vs0 + 3'd1;      // 缩小
+                    else begin
+                        if (ev_us | ev_ul | ev_ur) begin
+                            if (vs1 > 3'd2) vs1 <= vs1 - 3'd1;  // CH1 放大
+                        end
+                        if (ev_ds | ev_dl | ev_dr) begin
+                            if (vs1 < 3'd7) vs1 <= vs1 + 3'd1;  // CH1 缩小
+                        end
                     end
                 end
                 // 左右按键 = 横轴连续缩放（只改显示，不重新采集）
@@ -277,10 +322,10 @@ module scope_app #(
             end
             else begin
                 // ---- 菜单模式 ----
-                // 光标范围随页面变化：P0 有 9 项(0..8)，P1 有 4 项(0..3)
-                if (ev_ls) menu_sel <= (menu_sel == 4'd0) ? (menu_page ? 4'd3 : 4'd8)
+                // 光标范围随页面变化：P0 有 9 项(0..8)，P1 有 8 项(0..7)
+                if (ev_ls) menu_sel <= (menu_sel == 4'd0) ? (menu_page ? 4'd7 : 4'd8)
                                                          : (menu_sel - 4'd1);
-                if (ev_rs) menu_sel <= (menu_sel == (menu_page ? 4'd3 : 4'd8)) ? 4'd0
+                if (ev_rs) menu_sel <= (menu_sel == (menu_page ? 4'd7 : 4'd8)) ? 4'd0
                                                                               : (menu_sel + 4'd1);
                 if (ev_ul) menu_on  <= 1'b0;                // 退出菜单
 
@@ -322,28 +367,54 @@ module scope_app #(
                         endcase
                     end
                     else begin
-                        // ---- P1: 信号源设置 ----
+                        // ---- P1: 信号源设置（CH0/CH1 两套独立参数，共 8 项）----
+                        //   0..3 = CH0 的 WAV/FRE/ATT/PHA
+                        //   4..7 = CH1 的 WAV/FRE/ATT/PHA
+                        //   每一项只改自己那一路的参数，另一路完全不动：
+                        //   两个 func_gen 各自的 wave/freq/amp/phase 因此互不影响。
                         case (menu_sel)
                             4'd0: begin
-                                if (ev_us) wave <= wave + 2'd1;
-                                if (ev_ds) wave <= wave - 2'd1;
+                                if (ev_us) wave0 <= wave0 + 2'd1;
+                                if (ev_ds) wave0 <= wave0 - 2'd1;
                             end
                             4'd1: begin
-                                if (ev_us) fsel <= fsel + 3'd1;
-                                if (ev_ds) fsel <= fsel - 3'd1;
+                                if (ev_us) fsel0 <= fsel0 + 3'd1;
+                                if (ev_ds) fsel0 <= fsel0 - 3'd1;
                             end
                             4'd2: begin
-                                if (ev_us) asel <= asel + 2'd1;
-                                if (ev_ds) asel <= asel - 2'd1;
+                                if (ev_us) asel0 <= asel0 + 2'd1;
+                                if (ev_ds) asel0 <= asel0 - 2'd1;
                             end
                             4'd3: begin
-                                if (ev_us) phase_idx <= (phase_idx == 4'd9) ? 4'd0 : (phase_idx + 4'd1);
-                                if (ev_ds) phase_idx <= (phase_idx == 4'd0) ? 4'd9 : (phase_idx - 4'd1);
+                                if (ev_us) phase0 <= (phase0 == 4'd9) ? 4'd0 : (phase0 + 4'd1);
+                                if (ev_ds) phase0 <= (phase0 == 4'd0) ? 4'd9 : (phase0 - 4'd1);
+                            end
+                            4'd4: begin
+                                if (ev_us) wave1 <= wave1 + 2'd1;
+                                if (ev_ds) wave1 <= wave1 - 2'd1;
+                            end
+                            4'd5: begin
+                                if (ev_us) fsel1 <= fsel1 + 3'd1;
+                                if (ev_ds) fsel1 <= fsel1 - 3'd1;
+                            end
+                            4'd6: begin
+                                if (ev_us) asel1 <= asel1 + 2'd1;
+                                if (ev_ds) asel1 <= asel1 - 2'd1;
+                            end
+                            4'd7: begin
+                                if (ev_us) phase1 <= (phase1 == 4'd9) ? 4'd0 : (phase1 + 4'd1);
+                                if (ev_ds) phase1 <= (phase1 == 4'd0) ? 4'd9 : (phase1 - 4'd1);
                             end
                             default: ;
                         endcase
                     end
                 end
+
+                // 翻页后光标可能停在本页不存在的那一项上（例如光标在 P0 的
+                // ROL=8 时把 SW2 拨到 P1），这里夹回本页最后一项，
+                // 避免出现"菜单里看不到光标"的错觉。
+                if (menu_sel > (menu_page ? 4'd7 : 4'd8))
+                    menu_sel <= menu_page ? 4'd7 : 4'd8;
             end
 
             //================= 拨动开关（电平语义，优先级最高）=================
@@ -352,6 +423,12 @@ module scope_app #(
             run       <= ~sw_run;      // SW1 语义：拨上=冻结、拨下=运行
             // 菜单页完全由 SW2 决定（长按功能已移除）
             menu_page <=  sw_page && gen_ena;
+
+            // SW2 复用：菜单关闭时它就是"通道选择"（拨下=CH0、拨上=CH1）。
+            //   - 菜单打开时 sel_ch 保持不变：这时 SW2 的职责是翻页，不参与选通道；
+            //   - 用 menu_eff 而不是 menu_on，避免"刚拨上 SW0"的那一拍误更新；
+            //   - ch0_en/ch1_en 不受影响，显示使能仍只由菜单项控制。
+            if (!menu_eff) sel_ch <= sw_page;
 
             // 运行/冻结状态一变就重新采集一次（不论方向）
             sw_run_d <= sw_run;

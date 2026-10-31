@@ -230,6 +230,7 @@ module adda_scope_top #(
                 .rst       (~sys_rst_n),
                 .ch0_in    (adc_s_data[9:0]),
                 .adc_valid (adc_s_valid),
+                .adc_mode  (1'b0),              // 老顶层没有模式开关，固定走信号源
                 .ch1_in    (ad_out),
                 .key_n     ({3'b111, key_in}),   // 高层版只有 1 个键(L)
                 .cfg_tb_we (c_tb_we),

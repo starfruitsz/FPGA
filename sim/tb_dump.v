@@ -26,6 +26,7 @@ module tb_dump;
     reg [1:0] cfg_tmode=0;
     wire [11:0] vga_rgb;
     wire vga_hs, vga_vs, vga_de;
+    wire sel_ch_o;               // 选中通道（SW2 复用结果，本用例不关心，仅保持端口同步）
 
     vga_scope_top #(
         .H_VIS(640), .H_FP(16), .H_SYNC(96), .H_BP(48),
@@ -36,7 +37,7 @@ module tb_dump;
         .FEAT_TRIG(1), .FEAT_MEAS(1), .FEAT_SCROLL(1), .FEAT_UART(1)
     ) dut (
         .clk(clk), .rst(rst), .ch0_in(ch0_in), .ch1_in(10'd512),
-        .adc_valid(adc_valid), .key_n(4'b1111), .sw_menu(1'b0), .sw_run(1'b0), .sw_page(1'b0), .sw_roll(1'b0), .sw_roll2(1'b1), .sw_auto(1'b0), .sw_hzfree(1'b0), .sw_move(1'b0),
+        .adc_valid(adc_valid), .adc_mode(1'b0), .key_n(4'b1111), .sw_menu(1'b0), .sw_run(1'b0), .sw_page(1'b0), .sw_roll(1'b0), .sw_roll2(1'b1), .sw_auto(1'b0), .sw_hzfree(1'b0), .sw_move(1'b0),
         .cfg_tb_we(cfg_tb_we), .cfg_tb(cfg_tb),
         .cfg_run_we(1'b0), .cfg_run(1'b1),
         .cfg_ten_we(cfg_ten_we), .cfg_ten(cfg_ten),
@@ -47,7 +48,8 @@ module tb_dump;
         .cfg_tsrc_we(1'b0), .cfg_tsrc(1'b0),
         .cfg_pre_we(1'b0), .cfg_pre(10'd0),
         .cfg_hold_we(1'b0), .cfg_hold(16'd0),
-        .vga_rgb(vga_rgb), .vga_hs(vga_hs), .vga_vs(vga_vs), .vga_de(vga_de)
+        .vga_rgb(vga_rgb), .vga_hs(vga_hs), .vga_vs(vga_vs), .vga_de(vga_de),
+        .sel_ch_o(sel_ch_o)
     );
 
     always #(CLK_NS/2) clk = ~clk;
