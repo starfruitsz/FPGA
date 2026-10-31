@@ -115,7 +115,7 @@ module menu_layer (
             4'd3: ch = label[11:6];
             4'd4: ch = label[5:0];
             4'd5: ch = 6'd36;
-            default: ch = (val > 4'd9) ? 6'd37 : {2'b00, val};
+            default: ch = {2'b00, val};     // 4bit 值直接取字模：0-9 数字，10-15 显示 A-F
         endcase
     end
 

@@ -1,0 +1,2 @@
+idx=-1
+`timescale 1ns / 1ps ”这样的文本变成“写 tb_div=0x63”的一拍脉冲。 module scope_cmd ( input wire clk, input wire rst, input wire [7:0] rx_data, input wire rx_valid, output reg tb_we, output reg [15:0] tb_val, output reg run_we, output reg run_val, output reg ten_we, output reg ten_val, output reg lvl_we, output re

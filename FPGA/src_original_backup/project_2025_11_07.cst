@@ -1,0 +1,69 @@
+//Copyright (C)2014-2023 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//Tool Version: V1.9.9 (64-bit)
+//Part Number: GW5A-LV25UG324C2/I1
+//Device: GW5A-25
+//Device Version: A
+//Created Time: Wed 10 22 16:26:14 2025
+
+IO_LOC "led7" B9;
+IO_PORT "led7" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "led6" C14;
+IO_PORT "led6" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "led0" D14;
+IO_PORT "led0" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "tx" N18;
+IO_PORT "tx" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[9]" L13;
+IO_PORT "ad_out[9]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[8]" F18;
+IO_PORT "ad_out[8]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[7]" K13;
+IO_PORT "ad_out[7]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[6]" G18;
+IO_PORT "ad_out[6]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[5]" K14;
+IO_PORT "ad_out[5]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[4]" D18;
+IO_PORT "ad_out[4]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[3]" K16;
+IO_PORT "ad_out[3]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[2]" G14;
+IO_PORT "ad_out[2]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[1]" H14;
+IO_PORT "ad_out[1]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_out[0]" C18;
+IO_PORT "ad_out[0]" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "da_clk1" H13;
+IO_PORT "da_clk1" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "ad_clk1" H18;
+IO_PORT "ad_clk1" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "rx" P18;
+IO_PORT "rx" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "key_in" B16;
+IO_PORT "key_in" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[9]" C17;
+IO_PORT "ad_date[9]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[8]" K15;
+IO_PORT "ad_date[8]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[7]" F14;
+IO_PORT "ad_date[7]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[6]" J13;
+IO_PORT "ad_date[6]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[5]" D17;
+IO_PORT "ad_date[5]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[4]" K12;
+IO_PORT "ad_date[4]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[3]" G16;
+IO_PORT "ad_date[3]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[2]" L12;
+IO_PORT "ad_date[2]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[1]" F17;
+IO_PORT "ad_date[1]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "ad_date[0]" H17;
+IO_PORT "ad_date[0]" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "sys_rst_n" A15;
+IO_PORT "sys_rst_n" PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC "sys_clk" T9;
+IO_PORT "sys_clk" PULL_MODE=NONE BANK_VCCIO=3.3;

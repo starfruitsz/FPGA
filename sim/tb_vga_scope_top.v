@@ -52,7 +52,7 @@ module tb_vga_scope_top;
         .FEAT_TRIG(1), .FEAT_MEAS(1), .FEAT_SCROLL(1), .FEAT_UART(1)
     ) dut (
         .clk(clk), .rst(rst), .ch0_in(ch0_in), .ch1_in(ch1_in),
-        .adc_valid(adc_valid), .key_n(4'b1111), .sw_menu(1'b0), .sw_run(1'b1), .sw_page(1'b0), .sw_roll(1'b0),
+        .adc_valid(adc_valid), .key_n(4'b1111), .sw_menu(1'b0), .sw_run(1'b0), .sw_page(1'b0), .sw_roll(1'b0), .sw_roll2(1'b1), .sw_auto(1'b0), .sw_hzfree(1'b0), .sw_move(1'b0),
         .cfg_tb_we(cfg_tb_we), .cfg_tb(cfg_tb),
         .cfg_run_we(1'b0), .cfg_run(1'b1),
         .cfg_ten_we(1'b0), .cfg_ten(1'b0),

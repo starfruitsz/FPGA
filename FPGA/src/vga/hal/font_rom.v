@@ -15,7 +15,7 @@
 // 查表用的是组合逻辑 case，会被综合成 LUT（只读），不占 BSRAM。
 // 想加新字符：在 case 里加一条 64'h....，并在注释里写明是什么字符即可。
 // ======================================================================
-module font_rom (
+               module font_rom (
     input  wire [5:0] ch,
     input  wire [2:0] row,
     output wire [7:0] bits

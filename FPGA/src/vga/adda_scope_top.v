@@ -231,7 +231,7 @@ module adda_scope_top #(
                 .ch0_in    (adc_s_data[9:0]),
                 .adc_valid (adc_s_valid),
                 .ch1_in    (ad_out),
-                .key_in    (key_in),
+                .key_n     ({3'b111, key_in}),   // 高层版只有 1 个键(L)
                 .cfg_tb_we (c_tb_we),
                 .cfg_tb    (c_tb),
                 .cfg_run_we(c_run_we),

@@ -14,7 +14,7 @@ module sparkroad_scope_demo (
     input  wire        key_u,        // J13
     input  wire        key_d,        // G12
     input  wire        key_r,        // L12
-    input  wire [3:0]  sw,           // SW0..SW3
+    input  wire [7:0]  sw,           // SW0..SW7
     output wire        uart_tx,
     input  wire        uart_rx,
     output wire [7:0]  vga_r,

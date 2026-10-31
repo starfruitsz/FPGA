@@ -313,7 +313,8 @@ FPGA_TD/full_flow60.tcl：
 - 源码注释为中文，只加 // 行注释；改注释不得改动代码 token；
 - 模块命名：HAL 器件无关、ABS 图形/归一化、APP 业务；
 - 提交信息用 feat/fix/docs(scope): 前缀；
-- 新功能只加在 fix/review-p1-p11 分支，main 保持原样以便回退。
+- 新功能只加在 fix/review-p1-p11 分支，main 保持原样以便回退；
+- 算法类代码（滤波/开方/除法/周期估计/自动量程等）优先从开源社区（如 GitHub）获取现成实现，并注明仓库与 license；GitHub 上找不到、或用户明确强调/给出实现时，才手搓。
 
 ## 15. 快速命令
 

@@ -20,7 +20,7 @@ module sparkroad_scope_top #(
     input  wire        key_u,        // J13 BUTTON_U
     input  wire        key_d,        // G12 BUTTON_D
     input  wire        key_r,        // L12 BUTTON_R
-    input  wire [3:0]  sw,           // SW0..SW3 拨动开关 (T4/R5/T5/T6)
+    input  wire [7:0]  sw,           // SW0..SW7 (T4/R5/T5/T6/M6/P6/N6/P8)
     // 串口
     output wire        uart_tx,      // F16
     input  wire        uart_rx,      // E16
@@ -149,12 +149,19 @@ module sparkroad_scope_top #(
     wire [3:0] key_n = {key_u, key_d, key_l, key_r};
 
     // 拨动开关同步 + 消抖
-    wire sw0_lv, sw1_lv, sw2_lv, sw3_lv;
+    wire sw0_lv, sw1_lv, sw2_lv, sw3_lv, sw4_lv, sw5_lv, sw6_lv, sw7_lv;
     wire sw0_rise, sw1_rise, sw2_rise, sw3_rise;
     sw_edge u_sw0 (.clk(clk), .rst(rst), .sw_in(sw[0]), .lv(sw0_lv), .rise(sw0_rise));
     sw_edge u_sw1 (.clk(clk), .rst(rst), .sw_in(sw[1]), .lv(sw1_lv), .rise(sw1_rise));
     sw_edge u_sw2 (.clk(clk), .rst(rst), .sw_in(sw[2]), .lv(sw2_lv), .rise(sw2_rise));
     sw_edge u_sw3 (.clk(clk), .rst(rst), .sw_in(sw[3]), .lv(sw3_lv), .rise(sw3_rise));
+    // SW5(P6)：滚动开关（拨上=非滚动、拨下=滚动）
+    sw_edge u_sw5 (.clk(clk), .rst(rst), .sw_in(sw[5]), .lv(sw5_lv), .rise());
+    // SW4(M6)：自动量程（拨上=持续自适应）
+    sw_edge u_sw4 (.clk(clk), .rst(rst), .sw_in(sw[4]), .lv(sw4_lv), .rise());
+    // SW6(N6)：横轴缩放放开上限；SW7(P8)：U/D 移动基线
+    sw_edge u_sw6 (.clk(clk), .rst(rst), .sw_in(sw[6]), .lv(sw6_lv), .rise());
+    sw_edge u_sw7 (.clk(clk), .rst(rst), .sw_in(sw[7]), .lv(sw7_lv), .rise());
     wire [1:0] gen_wave;
     wire [2:0] gen_freq;
     wire [1:0] gen_amp;
@@ -226,7 +233,11 @@ module sparkroad_scope_top #(
         .sw_menu   (sw0_lv),          // 电平：拨上=菜单开
         .sw_run    (sw1_lv),          // 电平：拨上=运行
         .sw_page   (sw2_lv),          // 电平：拨上=信号源页
-        .sw_roll   (sw3_lv),          // 电平：拨上=滚动模式
+        .sw_roll   (sw3_lv),          // 电平：拨上=滚动模式（与串口 S 命令同源）
+        .sw_roll2  (sw5_lv),          // SW5(P6) 滚动开关
+        .sw_auto   (sw4_lv),          // SW4(M6) 自动量程
+        .sw_hzfree (sw6_lv),          // SW6(N6) 横轴缩放不设上限
+        .sw_move   (sw7_lv),          // SW7(P8) U/D 移动基线
         .cfg_tb_we (demo_cfg ? demo_tb_we    : cfg_tb_we),    .cfg_tb(demo_cfg ? 16'd0  : cfg_tb),
         .cfg_run_we(cfg_run_we),  .cfg_run(cfg_run),
         .cfg_ten_we(demo_cfg ? demo_ten_we   : cfg_ten_we),   .cfg_ten(demo_cfg ? 1'b1 : cfg_ten),
@@ -258,8 +269,17 @@ module sparkroad_scope_top #(
     assign vga_clk = clk;          // GM7123 像素时钟
 
     //------------------------------------------------------------------
-    // 数码管显示 AD 码值
+    // 数码管：演示模式下显示"采集完成次数"；正常模式下显示 AD 码值
+    //   （数字在涨 = 采集在跑；一直不动 = 采集卡住）
     //------------------------------------------------------------------
+    // 演示模式下显示"采集完成计数器"，可以直接看出采集有没有在跑
+    //   （数字在涨 = 每采满一屏就完成一次；一直是 0 = 采集卡住了）
+    reg [9:0] cap_cnt;
+    always @(posedge clk) begin
+        if (rst)                    cap_cnt <= 10'd0;
+        else if (dbg_status[7])     cap_cnt <= cap_cnt + 10'd1;
+    end
+    wire [9:0] seg_data = (DEMO_SINE != 0) ? cap_cnt : adc_data[9:0];
     // 板上数码管为共阳：段码低有效、位码高有效，故输出取反
     wire [3:0] sel_i;
     wire [7:0] seg_i;
@@ -268,7 +288,7 @@ module sparkroad_scope_top #(
         .clk    (clk),
         .rst_n  (rst_n),
         .point  (4'b0000),
-        .data   (adc_data[9:0]),
+        .data   (seg_data),
         .seg_en (1'b1),
         .sign   (1'b0),
         .sel    (sel_i),
@@ -344,7 +364,7 @@ module sparkroad_scope_top #(
         end
     end
 
-    wire [15:0] led_map = { scope_ch0[9:2],  // 15:8 电平条
+    wire [15:0] led_map = { 8'h00,          // 15:8 预留（以前的电平条会随波形闪烁，先关掉） 电平条
                             dbg_status[2],   // 7 运行
                             dbg_status[3],   // 6 滚动
                             dbg_status[0],   // 5 菜单

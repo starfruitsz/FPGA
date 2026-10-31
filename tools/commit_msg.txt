@@ -1,0 +1,9 @@
+feat(adc): dedicated adc_cmd UART parser (option 2)
+
+- src/adc/app/adc_cmd.v: R/O/S/K/N commands -> CSR writes
+  (0x20 range, 0x24 os, 0x28 sdiv, 0x08 rate, 0x04 enable);
+  decoupled from scope_cmd
+- parse rule: first char after CR is always the command letter, so
+  hex-letter commands (A/C/E/F) now work; same fix applied to scope_cmd
+- projects updated to 36 files; port checker covers adc/app
+- docs: command table and example

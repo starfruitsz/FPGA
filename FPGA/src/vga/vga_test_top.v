@@ -82,10 +82,11 @@ module vga_test_top #(
     //------------------------------------------------------------------
     wire ev_next;
     wire ev_long_unused;
+    wire ev_repeat_unused;
 
 //------------------------------------------------------------------
 // [APP] 按键去抖：复用示波器的模块，短按 ev_short 用来手动切换画面。
-// 长按事件在本模式下不使用（接了一个空信号）。
+// 长按/重复事件在本模式下不使用（接空信号）。
 //------------------------------------------------------------------
     scope_ui #(
         .CLK_HZ (50_000_000),
@@ -95,8 +96,9 @@ module vga_test_top #(
         .clk     (clk),
         .rst     (rst),
         .key_in  (key_in),
-        .ev_short(ev_next),
-        .ev_long (ev_long_unused)
+        .ev_short (ev_next),
+        .ev_long  (ev_long_unused),
+        .ev_repeat(ev_repeat_unused)
     );
 
     wire [11:0] rgb_comb;
