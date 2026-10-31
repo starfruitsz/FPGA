@@ -11,11 +11,19 @@
 //           - arm 不复位写指针
 //           - 不翻乒乓半区(buf_wr/buf_disp 不变)
 //           - roll 拉低后回到乒乓流程：采满一屏(DEPTH 点)才切换显示半区
+//   场景 D: normal 模式无触发 -> 1024 采样 tick 超时自动换页（AUTO 模式）
+//           - ARMED 连续 AUTO_TIMEOUT 个 tick 没触发就进 FILL
+//           - 换页基准 rd_base = 当前写指针（从最老的样本开始显示）
+//           - FILL 采满一屏(DEPTH 点)后 done、翻乒乓半区，整屏都是新数据
+//   场景 E: single 模式同样能超时换页，但采完仍停在 DONE 等 arm（语义不变）
+//   场景 F: auto(0) 模式保持原样（自由滚动、不换页、done 恒 0）
 //=============================================================================
 module tb_scope_capture;
 
     localparam integer DEPTH_LOG2 = 4;
     localparam integer DEPTH      = (1 << DEPTH_LOG2);
+    localparam integer AUTO_TMO   = 1024;   // 与 scope_capture 的 AUTO_TIMEOUT 默认值一致
+    localparam integer TMO_LIMIT  = AUTO_TMO + 64;  // 超时等待上限（留余量）
 
     reg         clk   = 1'b0;
     reg         rst   = 1'b1;
@@ -69,6 +77,11 @@ module tb_scope_capture;
     reg [DEPTH_LOG2-1:0] waddr_start, waddr_end, waddr_hold;
     reg buf_wr_start, buf_disp_start;
     reg buf_wr_hold;
+
+    // 场景 D/E/F（无触发超时换页）观测变量
+    integer armed_ticks, fill_ticks, done_before;
+    reg [DEPTH_LOG2-1:0] waddr_at_tmo, rd_base_at_tmo, waddr_at_done;
+    reg buf_wr_before, buf_disp_before;
 
     // 观测：trig_det 出现的那一拍，waddr 已经 +1，故 waddr-1 即触发写入地址
     always @(posedge clk) begin
@@ -217,6 +230,151 @@ module tb_scope_capture;
                                              begin errors=errors+1; $display("  FAIL 没有采满一屏就换了半区"); end
         if (buf_disp !== buf_wr_start)       begin errors=errors+1; $display("  FAIL 显示的半区不是刚采满的那半"); end
         if (buf_wr !== ~buf_wr_start)        begin errors=errors+1; $display("  FAIL 写半区没有翻到另一半"); end
+
+        // ---------- 场景 D：normal 模式无触发 -> 超时自动换页 ----------
+        //   对应现场缺陷：AD/DA 模式下 ch0 是 ADC 数据，输入直流/无信号时
+        //   触发永不命中，采集一直卡在 ARMED 往"正在显示的那半"就地写，
+        //   屏幕上是"旧波形 + 新波形"叠在一起。
+        //   修复后：ARMED 连续 AUTO_TIMEOUT(1024) 个采样 tick 没触发就自动
+        //   进 FILL，rd_base 锁到当前写指针（从最老的样本开始显示），采满
+        //   一屏后翻乒乓半区 —— 整屏换成新数据，不残留旧波形。
+        rst = 1'b1;
+        repeat (2) @(posedge clk);
+        trig_mode = 2'd1;       // normal
+        trig_en   = 1'b0;       // 没有触发源：触发永不命中
+        pre_trig  = 10'd5;      // 故意给非 0：超时路径不能用 pre_trig 偏置
+        holdoff   = 16'd0;
+        roll      = 1'b0;
+        trig_cnt  = 0;
+        done_cnt  = 0;
+        rst = 1'b0;
+
+        @(posedge clk); arm <= 1'b1;
+        @(posedge clk); arm <= 1'b0;
+        wait (state == 2'd1);              // 进入 ARMED
+        buf_wr_before   = buf_wr;
+        buf_disp_before = buf_disp;
+
+        // 数"ARMED 里连续多少个采样 tick 没等到触发"（rate_div=0，每拍都是 tick）
+        //   #1 是为了在时钟沿的非阻塞赋值生效之后再采样，否则会多数/少数一拍
+        armed_ticks = 0;
+        while ((state == 2'd1) && (armed_ticks < TMO_LIMIT)) begin
+            @(posedge clk);
+            #1;
+            armed_ticks = armed_ticks + 1;
+        end
+        waddr_at_tmo   = waddr;
+        rd_base_at_tmo = rd_base;
+
+        $display("[tb_scope_capture] 场景 D: normal 无触发超时换页");
+        $display("  ARMED 无触发持续 = %0d tick (expect %0d)", armed_ticks, AUTO_TMO);
+        $display("  超时瞬间 state=%0d (expect 2=FILL)", state);
+        $display("  rd_base=%0d waddr=%0d (expect 相等：基准锁在写指针上)",
+                 rd_base_at_tmo, waddr_at_tmo);
+        $display("  trig_det=%0d (expect 0：全程没有触发)", trig_cnt);
+
+        if (armed_ticks != AUTO_TMO)   begin errors=errors+1; $display("  FAIL 超时不是 1024 个采样 tick"); end
+        if (state != 2'd2)             begin errors=errors+1; $display("  FAIL 超时后没有进入 FILL"); end
+        if (rd_base_at_tmo !== waddr_at_tmo)
+                                       begin errors=errors+1; $display("  FAIL 超时没有把 rd_base 锁到写指针"); end
+        if (trig_cnt != 0)             begin errors=errors+1; $display("  FAIL 无触发用例里出现了触发"); end
+
+        // FILL 必须再采满一屏(DEPTH 点)才 done，并把显示半区翻到刚写的那半
+        fill_ticks = 0;
+        while ((done_cnt == 0) && (fill_ticks < (DEPTH + 8))) begin
+            @(posedge clk);
+            fill_ticks = fill_ticks + 1;
+        end
+        repeat (2) @(posedge clk);
+        waddr_at_done = waddr;
+        $display("  FILL 到 done 用时 = %0d 拍 (expect %0d 拍左右)", fill_ticks, DEPTH);
+        $display("  采满后 state=%0d waddr=%0d (expect 3 / 回到 rd_base=%0d)",
+                 state, waddr_at_done, rd_base_at_tmo);
+        $display("  buf_disp %0d -> %0d, buf_wr %0d -> %0d (expect 换页)",
+                 buf_disp_before, buf_disp, buf_wr_before, buf_wr);
+
+        if (done_cnt != 1)                     begin errors=errors+1; $display("  FAIL 超时后没有完成一次捕获"); end
+        if (state != 2'd3)                     begin errors=errors+1; $display("  FAIL 超时捕获没有停在 DONE"); end
+        if ((fill_ticks < DEPTH) || (fill_ticks > DEPTH + 2))
+                                               begin errors=errors+1; $display("  FAIL 不是采满一屏才换页"); end
+        if (waddr_at_done !== rd_base_at_tmo)  begin errors=errors+1; $display("  FAIL 没有把 [rd_base, rd_base+DEPTH) 整屏重写一遍"); end
+        if (buf_disp !== buf_wr_before)        begin errors=errors+1; $display("  FAIL 显示半区不是刚采满的那半"); end
+        if (buf_wr !== ~buf_wr_before)         begin errors=errors+1; $display("  FAIL 写半区没有翻到另一半"); end
+
+        // ---------- 场景 E：single 模式同样超时换页，但采完仍停在 DONE ----------
+        //   语义不变：single 一次 arm 最多采一屏，采完必须等下一次 arm，
+        //   超时只是让"没触发"也能把这一屏采完，不会变成连续刷新。
+        rst = 1'b1;
+        repeat (2) @(posedge clk);
+        trig_mode = 2'd2;       // single
+        trig_en   = 1'b0;
+        pre_trig  = 10'd0;
+        trig_cnt  = 0;
+        done_cnt  = 0;
+        rst = 1'b0;
+
+        @(posedge clk); arm <= 1'b1;
+        @(posedge clk); arm <= 1'b0;
+        wait (state == 2'd1);
+
+        armed_ticks = 0;
+        while ((state == 2'd1) && (armed_ticks < TMO_LIMIT)) begin
+            @(posedge clk);
+            #1;
+            armed_ticks = armed_ticks + 1;
+        end
+        fill_ticks = 0;
+        while ((done_cnt == 0) && (fill_ticks < (DEPTH + 8))) begin
+            @(posedge clk);
+            #1;
+            fill_ticks = fill_ticks + 1;
+        end
+        repeat (2) @(posedge clk);
+        done_before = done_cnt;
+        waddr_hold  = waddr;
+        buf_wr_hold = buf_wr;
+
+        // 再等 3000 拍：单次模式必须一直停在 DONE，不许自动再采
+        repeat (3000) @(posedge clk);
+
+        $display("[tb_scope_capture] 场景 E: single 无触发超时换页 + 停在 DONE");
+        $display("  ARMED 无触发持续 = %0d tick (expect %0d)，state=%0d done=%0d",
+                 armed_ticks, AUTO_TMO, state, done_before);
+        $display("  3000 拍后 state=%0d done 次数=%0d (expect 3 / %0d)",
+                 state, done_cnt, done_before);
+
+        if (armed_ticks != AUTO_TMO) begin errors=errors+1; $display("  FAIL single 模式没有超时换页"); end
+        if (done_before != 1)        begin errors=errors+1; $display("  FAIL single 模式超时后没有完成捕获"); end
+        if (state != 2'd3)           begin errors=errors+1; $display("  FAIL single 模式没有停在 DONE"); end
+        if (done_cnt != done_before) begin errors=errors+1; $display("  FAIL single 模式自动重采了（语义被改坏）"); end
+        if (waddr !== waddr_hold)    begin errors=errors+1; $display("  FAIL single 停在 DONE 时还在往缓冲里写"); end
+        if (buf_wr !== buf_wr_hold)  begin errors=errors+1; $display("  FAIL single 停在 DONE 后仍翻了半区"); end
+
+        // ---------- 场景 F：auto(0) 模式保持原样（自由滚动，不走乒乓换页）----------
+        //   trig_mode=0 是"自由滚动 + 只更新对齐基准"，显示端读的是正在写的那半，
+        //   本来就没有换页概念；本次改动不能把它改成会翻半区。
+        rst = 1'b1;
+        repeat (2) @(posedge clk);
+        trig_mode = 2'd0;       // auto
+        trig_en   = 1'b0;       // 同样没有触发
+        trig_cnt  = 0;
+        done_cnt  = 0;
+        rst = 1'b0;
+
+        @(posedge clk); arm <= 1'b1;
+        @(posedge clk); arm <= 1'b0;
+        buf_wr_before   = buf_wr;
+        buf_disp_before = buf_disp;
+        repeat (3000) @(posedge clk);
+
+        $display("[tb_scope_capture] 场景 F: auto(0) 模式不受超时换页影响");
+        $display("  %0d 拍后 state=%0d done=%0d buf_wr=%b buf_disp=%b (expect 1/0/不变 %b/%b)",
+                 3000, state, done_cnt, buf_wr, buf_disp, buf_wr_before, buf_disp_before);
+
+        if (state != 2'd1)                    begin errors=errors+1; $display("  FAIL auto 模式离开了 ARMED"); end
+        if (done_cnt != 0)                    begin errors=errors+1; $display("  FAIL auto 模式不应产生 done"); end
+        if (buf_wr !== buf_wr_before)         begin errors=errors+1; $display("  FAIL auto 模式翻了写半区"); end
+        if (buf_disp !== buf_disp_before)     begin errors=errors+1; $display("  FAIL auto 模式翻了显示半区"); end
 
         if (errors == 0) $display("[tb_scope_capture] PASS");
         else             $display("[tb_scope_capture] FAIL (%0d errors)", errors);

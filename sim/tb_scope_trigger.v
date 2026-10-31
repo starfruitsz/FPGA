@@ -21,6 +21,10 @@
 //   - 显示读地址切回 buf_disp（已采完的那半）
 //   - 必须重新采满一屏(1024 点)才更新 buf_disp / 翻 buf_wr
 //   - 新显示的那半内容必须是连续斜坡（证明是整屏采完才切，不是半屏）
+// 判据 E（无触发也要换页，AUTO 模式）—— 现场缺陷"旧波形 + 新波形叠在一起":
+//   - 输入换成直流(300, 低于触发电平 512)，上升沿永不发生，触发永不命中
+//   - 采集不能永久卡在 ARMED：连续 1024 个采样 tick 没触发就要自动采满一屏
+//   - 换页后整屏 1024 点都必须是最新的直流值，不能残留上一屏的斜坡/方波
 //=============================================================================
 module tb_scope_trigger;
 
@@ -86,6 +90,9 @@ module tb_scope_trigger;
     // 判据 C / D 的观测变量
     integer wa_c0, wa_c1, we_bad, elapsed, done_seen, disp_before, wr_before;
     reg [9:0] disp_after, wr_after;
+
+    // 判据 E（无触发换页）的观测变量
+    integer e_tmo, e_trig, e_disp_b, e_wr_b, e_disp_a, e_wr_a;
 
     initial begin
         if ($test$plusargs("vcd")) begin
@@ -269,6 +276,79 @@ module tb_scope_trigger;
         end
         $display("  新半区连续斜坡不符点数 = %0d (expect 0)", bad);
         if (bad != 0) begin errors=errors+1; $display("  FAIL 显示半区不是整屏采满的数据"); end
+
+
+        // ================= 判据 E: 无触发也要换页（AUTO 换页）=================
+        //   现场缺陷: 非滚动 + AD/DA 模式下 ch0 是 ADC 数据，输入直流/无信号时
+        //   触发电平永不穿越，采集卡在 ARMED 一直往"正在显示的那半"就地写，
+        //   屏幕上就是"函数发生器旧波形 + AD/DA 新波形"叠在一起。
+        //   这里把输入换成直流 300（低于触发电平 512，上升沿永不发生），
+        //   采集必须靠内部超时(连续 1024 个采样 tick 没触发)自动采满一屏并
+        //   翻半区；换页后整屏都必须是新采的直流值，不许残留上一屏的斜坡。
+        ramp_mode = 1'b0;
+        sq_mode   = 1'b0;
+        @(posedge clk);
+        ch0_in = 10'd300;                  // 直流: 300 < 512，触发永不命中
+
+        // 等到一次"新布防"（先离开 ARMED，再等重新进入），超时计数必然从 0 起算
+        e_tmo = 0;
+        while ((dut.u_cap0.state === 2'd1) && (e_tmo < 6000)) begin
+            @(posedge clk); #1;
+            e_tmo = e_tmo + 1;
+        end
+        e_tmo = 0;
+        while ((dut.u_cap0.state !== 2'd1) && (e_tmo < 6000)) begin
+            @(posedge clk); #1;
+            e_tmo = e_tmo + 1;
+        end
+        if (dut.u_cap0.state !== 2'd1) begin
+            errors = errors + 1;
+            $display("  FAIL 无触发时采集没有回到 ARMED（等了 %0d 拍）", e_tmo);
+        end
+
+        e_disp_b = dut.buf_disp0;
+        e_wr_b   = dut.buf_wr0;
+        e_tmo    = 0;
+        e_trig   = 0;
+        while ((dut.u_cap0.state === 2'd1) && (e_tmo < 6000)) begin
+            @(posedge clk); #1;
+            e_tmo = e_tmo + 1;
+            if (dut.trig_det0 === 1'b1) e_trig = e_trig + 1;
+        end
+        $display("[tb_scope_trigger] E 无触发超时换页: ARMED 持续=%0d 采样 tick (expect 1024)，触发命中=%0d (expect 0)，离开 ARMED 后 state=%0d (expect 2=FILL)",
+                 e_tmo, e_trig, dut.u_cap0.state);
+        if (e_tmo !== 1024) begin errors=errors+1;
+            $display("  FAIL 无触发时不是 1024 个采样 tick 就换页"); end
+        if (e_trig !== 0) begin errors=errors+1;
+            $display("  FAIL 直流输入下居然还有触发命中"); end
+        if (dut.u_cap0.state !== 2'd2) begin errors=errors+1;
+            $display("  FAIL 超时后没有进入 FILL"); end
+
+        // 采满一屏后必须换页，并把整屏换成新采的直流值
+        done_seen = 0;
+        elapsed   = 0;
+        while ((elapsed < 3000) && (done_seen == 0)) begin
+            @(posedge clk); #1;
+            elapsed = elapsed + 1;
+            if (dut.done0 === 1'b1) done_seen = 1;
+        end
+        e_disp_a = dut.buf_disp0;
+        e_wr_a   = dut.buf_wr0;
+
+        bad = 0;
+        for (k = 0; k < 1024; k = k + 1) begin
+            v = dut.u_ram0.mem[e_disp_a*1024 + k];
+            if (v != 300) bad = bad + 1;
+        end
+        $display("  超时捕获: done=%0d 用时=%0d 拍，buf_disp %0d -> %0d，buf_wr %0d -> %0d",
+                 done_seen, elapsed, e_disp_b, e_disp_a, e_wr_b, e_wr_a);
+        $display("  换页后整屏不是直流 300 的点数 = %0d (expect 0，说明没有残留旧波形)", bad);
+        if (done_seen == 0)            begin errors=errors+1; $display("  FAIL 无触发超时后没有完成捕获"); end
+        if (elapsed < 1024)            begin errors=errors+1; $display("  FAIL 没有采满一屏就换页"); end
+        if (e_disp_a !== e_wr_b)       begin errors=errors+1; $display("  FAIL 显示半区不是刚采满的那半"); end
+        if (e_wr_a !== ((e_wr_b + 1) & 1))
+                                       begin errors=errors+1; $display("  FAIL 写半区没有翻到另一半"); end
+        if (bad != 0)                  begin errors=errors+1; $display("  FAIL 换页后整屏不是新数据（旧波形残留）"); end
 
         if (errors == 0) $display("[tb_scope_trigger] PASS");
         else             $display("[tb_scope_trigger] FAIL (%0d errors)", errors);
