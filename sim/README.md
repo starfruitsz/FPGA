@@ -34,10 +34,10 @@ C:\iverilog\bin\vvp.exe -n sim\_build\adc.vvp
 | `tb_uart_tx` | `uart_tx.v` | 115200 8N1、21 位时隙、0xA55A 双帧、先低字节 LSB first | PASS |
 | `tb_uart_rx` | `uart_rx.v` | 按位注入 8N1 串流：0x55/0xAA/0x00/0xFF/0x5A 逐字节还原，位中点采样 | PASS |
 | `tb_cmd_chain` | `uart_rx` + `scope_cmd` + `adc_cmd` | 真串口喂 ASCII：T/R/A/L/E/S/M/C/P/H 与 R/O/S/K/N 全部命中；未知命令和小写不产生写；`R`/`S` 两边各写各的 | PASS |
-| `tb_scope_capture` | `vga/app/scope_capture.v` | 触发状态机 IDLE→ARMED→FILL→DONE、normal 只触发一次、`rd_base = 触发地址 − pre_trig`、DONE 停止写入、auto 模式不进 FILL | PASS |
+| `tb_scope_capture` | `vga/app/scope_capture.v` | 触发状态机 IDLE→ARMED→FILL→DONE、normal 只触发一次、`rd_base = 触发地址 − pre_trig`、DONE 停止写入、auto 模式不进 FILL；**无触发超时换页**：normal/single 下 ARMED 连续 1024 个采样 tick 没触发就自动进 FILL、`rd_base` 锁到写指针、采满 DEPTH 点后翻半区（single 采完仍停在 DONE，auto 不换页） | PASS |
 | `tb_adc_ad7606_spi` | `adc/hal/adc_ad7606_spi.v` + `ad7606_model.v` | 复位脉冲、locked/error、CONVST 宽度、64 个 SCLK 下降沿、4 路 16bit 补码逐位还原（含 0x0001 / 0x8000 边界） | PASS |
 | `tb_adc_ad7606_top` | `adc/adc_ad7606_top.v`（含 `adc_cfg`/`adc_norm`） | CSR 写 0x28/0x08/0x04、读 ID=0x0100034A、补码→偏移二进制→取高 10 位（0x1234→584、0xEDCC→439、0x0001→512、0x8000→0） | PASS |
-| `tb_scope_trigger` | `vga/vga_scope_top.v`（触发/滚动路径） | 周期 90 的方波：normal 模式下 `[rd_base..+639]` 严格符合"以触发点为起点"的相位（两次捕获各 0 个不符点）；关触发后同批地址一帧内变化 48/90（相位自由漂移）；滚动模式下最右列采样(949) > 最左列(311) | PASS |
+| `tb_scope_trigger` | `vga/vga_scope_top.v`（触发/滚动路径） | 周期 90 的方波：normal 模式下 `[rd_base..+639]` 严格符合"以触发点为起点"的相位（两次捕获各 0 个不符点）；关触发后同批地址一帧内变化 48/90（相位自由漂移）；滚动模式下最右列采样(949) > 最左列(311)；**直流输入(300<电平 512) 时 ARMED 连续 1024 tick 无触发 → 超时换页，换页后整屏 1024 点全是新采的直流值（旧波形 0 残留）** | PASS |
 | `tb_vga_scope_top` | `vga/vga_scope_top.v`（12 个子模块，整屏） | 640×480 `PIX_DIV=1`：每帧 de 像素 307200、行周期 800 clk、CH0=512 平在 y=223、CH1=300 平在 y=316、网格/零轴/文字/背景齐全、y=223/y=224 整行 0 异常列、斜坡输入纵向铺满 0..447 | PASS |
 | `tb_vga_scope_top_pix2` | 同上，`-DPIX2` | `PIX_DIV=2` 对照：两个配置的颜色计数必须完全一致（修复后已一致） | PASS |
 | `tb_vga_test_top` | `vga/vga_test_top.v` + `vga_test_app.v` | 自检顶层 5 幅画面：连抓 5 帧**按内容分类**（彩条/灰阶/棋盘/边框/文字），要求 5 种全部出现 | PASS |

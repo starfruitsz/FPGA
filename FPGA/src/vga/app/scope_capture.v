@@ -1,5 +1,5 @@
 //==============================================================================
-// 层: 应用(采集)  文件: app/scope_capture.v   [v3: 触发状态机 + 预触发 + 滚动]
+// 层: 应用(采集)  文件: app/scope_capture.v   [v4: 触发状态机 + 预触发 + 滚动 + 无触发换页]
 // 功能: 单通道采样引擎
 //   - 采样率 = CLK / (rate_div+1)，运行时可配
 //   - 循环写入 BSRAM；写指针 arm 时归零
@@ -13,11 +13,23 @@
 //       不响应触发(trig_det 恒 0)、不被 arm 复位写指针、不翻乒乓半区；
 //       显示端直接读正在写的那半，按"纸带"方式滚过去。
 //     roll = 0: 回到原来的触发 + 乒乓流程（采满一屏才换显示半区）。
+//   - [v4] 无触发超时换页(AUTO 模式)：
+//       非滚动模式下若 ARMED 连续 AUTO_TIMEOUT(默认 1024)个采样 tick 都没等到
+//       触发(典型场景: AD/DA 模式 ch0 是 ADC 数据且输入为直流/无信号)，就当作
+//       "没触发"强制进 FILL 采满一屏并翻乒乓半区，光标基准 rd_base 锁在当前写
+//       指针(缓冲里最老的那个样本)。这样屏幕整屏换成新采的一屏，不会出现
+//       "函数发生器旧波形 + AD/DA 新波形"叠在一起的现象，状态也不会永久卡在
+//       ARMED。真正的 AUTO 模式(trig_mode=0)本来就是自由滚动、显示正在写的那
+//       半，没有乒乓换页的概念，行为保持不变；single 仍然是"一次 arm 最多采一
+//       屏，采完停在 DONE 等下一次 arm"。
 //==============================================================================
 `timescale 1ns / 1ps
 
 module scope_capture #(
-    parameter integer DEPTH_LOG2 = 10
+    parameter integer DEPTH_LOG2    = 10,
+    // 无触发超时(采样 tick 数)：ARMED 下连续这么多个采样点都没等到触发，
+    // 就自动采满一屏并换页(AUTO 换页)。1024 = 一屏的采样点数。
+    parameter integer AUTO_TIMEOUT  = 1024
 )(
     input  wire                    clk,
     input  wire                    rst,
@@ -54,8 +66,20 @@ module scope_capture #(
     reg [9:0]  din_d;          // 上一拍触发源采样
     reg [DEPTH_LOG2:0] post_cnt;
     reg [15:0] hold_cnt;       // 触发保持计数(>0 时忽略新触发)
+    reg [15:0] tmo_cnt;        // 无触发超时计数(ARMED 下按采样 tick 累加)
 
     wire tick = sample_valid && (rate_cnt == rate_div);
+
+    //------------------------------------------------------------------
+    // 无触发超时判据(AUTO 换页)
+    //   - 只对 normal(1)/single(2) 生效：这两个模式是"触发 + 乒乓换页"流程，
+    //     等不到触发就会永久停在 ARMED，屏幕一直混着新旧数据；
+    //   - auto(0) 是自由滚动 + 只更新对齐基准，本来就没有换页概念，保持不动；
+    //   - roll(滚动纸带)走的是另一条分支，同样不受影响。
+    //   计满 AUTO_TIMEOUT 个采样 tick 即命中（第 AUTO_TIMEOUT 个 tick 触发）。
+    //------------------------------------------------------------------
+    wire auto_tmo_ena = (!roll) && (trig_mode != 2'd0) && (AUTO_TIMEOUT > 0);
+    wire auto_tmo_hit = auto_tmo_ena && (tmo_cnt >= (AUTO_TIMEOUT - 1));
 
     // 完成且非自动模式时停止写入
     wire stopped = (state == ST_DONE) && (trig_mode != 2'd0);
@@ -80,6 +104,7 @@ module scope_capture #(
             post_cnt <= {(DEPTH_LOG2+1){1'b0}};
             state    <= ST_IDLE;
             hold_cnt <= 16'd0;
+            tmo_cnt  <= 16'd0;
             buf_wr   <= 1'b0;
             buf_disp <= 1'b0;
         end
@@ -95,6 +120,7 @@ module scope_capture #(
                 //   状态固定报 ARMED(运行)，供上层状态显示使用
                 state    <= ST_ARMED;
                 post_cnt <= {(DEPTH_LOG2+1){1'b0}};
+                tmo_cnt  <= 16'd0;      // 滚动模式不做无触发超时
                 if (!run) begin
                     rate_cnt <= 16'd0;
                 end
@@ -119,6 +145,7 @@ module scope_capture #(
                             waddr    <= {DEPTH_LOG2{1'b0}};
                             rd_base  <= {DEPTH_LOG2{1'b0}};
                             post_cnt <= {(DEPTH_LOG2+1){1'b0}};
+                            tmo_cnt  <= 16'd0;      // 新的一次布防，超时重新计时
                             state    <= ST_ARMED;
                         end
                     end
@@ -129,6 +156,7 @@ module scope_capture #(
                             waddr    <= {DEPTH_LOG2{1'b0}};
                             rd_base  <= {DEPTH_LOG2{1'b0}};
                             post_cnt <= {(DEPTH_LOG2+1){1'b0}};
+                            tmo_cnt  <= 16'd0;      // 重新布防，超时重新计时
                         end
                         else if (!run) begin
                             rate_cnt <= 16'd0;
@@ -144,8 +172,25 @@ module scope_capture #(
                                 rd_base  <= waddr - pre_trig[DEPTH_LOG2-1:0];
                                 hold_cnt <= holdoff;
                                 post_cnt <= {(DEPTH_LOG2+1){1'b0}};
+                                tmo_cnt  <= 16'd0;      // 等到触发了，超时重新计时
                                 // 自动模式不改变状态，只更新对齐基准
                                 state    <= (trig_mode == 2'd0) ? ST_ARMED : ST_FILL;
+                            end
+                            else if (auto_tmo_hit) begin
+                                // ---------------- 无触发超时：AUTO 换页 ----------------
+                                // 等不到触发也要出图：直接进 FILL 采满一屏并翻半区。
+                                // rd_base 锁到下一拍的写指针 waddr_nxt —— 那个格子
+                                // 正是循环缓冲里最老的样本(马上被本次 FILL 的第一个
+                                // 点覆盖)，显示从它开始读，采满后整屏都是新数据，
+                                // 不会和上一屏叠在一起。
+                                rd_base  <= waddr_nxt;
+                                post_cnt <= {(DEPTH_LOG2+1){1'b0}};
+                                tmo_cnt  <= 16'd0;
+                                state    <= ST_FILL;
+                            end
+                            else begin
+                                // 还没等到触发：累加无触发计数，计满即超时
+                                tmo_cnt <= tmo_cnt + 16'd1;
                             end
                         end
                         // 采样分频计数：计到 rate_div 后保持，等下一个有效采样点再清零。
@@ -190,6 +235,7 @@ module scope_capture #(
                             waddr    <= {DEPTH_LOG2{1'b0}};
                             rd_base  <= {DEPTH_LOG2{1'b0}};
                             post_cnt <= {(DEPTH_LOG2+1){1'b0}};
+                            tmo_cnt  <= 16'd0;      // 新的一次布防，超时重新计时
                             state    <= ST_ARMED;
                         end
                     end

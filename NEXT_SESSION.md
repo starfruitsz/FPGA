@@ -278,6 +278,7 @@ create_flash_file -bit1 <比特流1> -bit2 <比特流2> \
 | p25 | 并口 AD/DA + ADRC 首次综合 | FAIL 16 条 setup 违规，最差 -13.5 ns |
 | p26 | ESO 流水化（乘法分两级、z1/z2/z3 拆两级） | OK +4.0 ns |
 | p27 | 双通道自动量程（两路取较大峰值定档、各自居中） | OK +7.3 ns |
+| p29 | 无触发超时换页（AUTO 触发）：ARMED 等满 1024 点自动 FILL，修非滚动下新旧数据混屏 | OK +9.2 ns |
 | **p28** | 双信号源(gen0/gen1) + P1 菜单扩 8 项 + SW2 通道选择 | OK +6.9 ns |
 
 **当前固件：p28**（FPGA_TD/scope_eg4_p28_Runs/best_result/scope_eg4_p28.bit），回归 20/20。
@@ -309,3 +310,13 @@ create_flash_file -bit1 <比特流1> -bit2 <比特流2> \
 ### 菜单
 - P0（9 项）：CH0 / CH1 / VS0 / VS1 / VP0 / VP1 / HSC / TB(0..F) / ROL
 - P1（8 项）：CH0 的 WAV/FRE/ATT/PHA + CH1 的 WAV/FRE/ATT/PHA
+
+## 11. p29 补充（2026-10-31 23:00）
+
+**问题**：非滚动模式切到 AD/DA 模式后，屏幕出现函数发生器旧波形与 ADC 新数据混叠。
+
+**根因**：外部无信号（直流/悬空）时触发永不发生，采集停在 ARMED，持续写入正在显示的半区；另一半区仍残留切换前数据。
+
+**修法**：scope_capture 增加无触发超时——ARMED 连续 1024 个采样 tick 未触发则自动进入 FILL，rd_base 锁为当时 waddr（AUTO 触发行为）。触发正常时行为不变。
+
+**验证**：tb_scope_capture / tb_scope_trigger 增加无触发换页断言，回归 20/20；p29 时序 +9.156 ns，0 违规。
