@@ -320,3 +320,10 @@ create_flash_file -bit1 <比特流1> -bit2 <比特流2> \
 **修法**：scope_capture 增加无触发超时——ARMED 连续 1024 个采样 tick 未触发则自动进入 FILL，rd_base 锁为当时 waddr（AUTO 触发行为）。触发正常时行为不变。
 
 **验证**：tb_scope_capture / tb_scope_trigger 增加无触发换页断言，回归 20/20；p29 时序 +9.156 ns，0 违规。
+
+## 12. 交接快照（2026-10-31 23:12）
+
+- 当前固件 p29（AD/DA+ADRC、双通道自动量程、双信号源、SW2 通道选择、AUTO 触发换页），回归 20/20，时序 +9.156 ns。
+- 手册已到 v1.5：doc/manual.tex 与根目录 FPGA_scope_manual.pdf 均已更新。
+- 仓库：分支 fix/review-p1-p11 与 main 均已推送（每轮改动都合 main）。
+- 未完成：p29 之后的现场验证反馈；手册 PDF 需随下次改动再编；main 本次 manual 提交待合并（如未合，执行 git checkout main && git merge fix/review-p1-p11 && push）。
