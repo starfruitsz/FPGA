@@ -23,13 +23,18 @@
 //   3) 串口配置通道（第二路 uart_rx + ASCII 命令解析）。
 // 注意：VGA 显示只“看” ad_date / ad_out，不干涉原来的信号通路。
 // ======================================================================
-module adda_scope_top (
+module adda_scope_top #(
+    // [P5] 串口上报方式（透传给 adda）
+    parameter integer UART_MODE = 0,   // 0=连续发送  1=按标志位定时发送
+    parameter integer REPORT_MS = 26   // 标志位模式下的上报周期(ms)
+)( 
     input  wire        sys_clk,
     input  wire        sys_rst_n,
     input  wire [9:0]  ad_date,
     input  wire        key_in,
     input  wire        ad_clk,
     input  wire        da_clk,
+
     input  wire        rx,
 
     output wire        ad_clk1,
@@ -78,12 +83,15 @@ module adda_scope_top (
 // [原有工程] 端口一一对应，内部逻辑完全没有改动。
 // ad_out 既送给 DAC，也送给示波器的 CH1，用来观察控制量。
 //------------------------------------------------------------------
-    adda u_adda (
+    adda #(
+        .UART_MODE(UART_MODE),
+        .REPORT_MS(REPORT_MS)
+    ) u_adda (
         .sys_clk  (sys_clk),
         .sys_rst_n(sys_rst_n),
         .ad_date  (ad_date),
         .key_in   (key_in),
-        .ad_clk   (ad_clk),
+        .ad_clk   (ad_clk),   // P9 已回撤：保留端口(本设计未使用)
         .da_clk   (da_clk),
         .rx       (rx),
         .ad_clk1  (ad_clk1),
@@ -95,6 +103,38 @@ module adda_scope_top (
         .led0     (led0),
         .led6     (led6),
         .led7     (led7)
+    );
+
+    //------------------------------------------------------------------
+    // ADC 硬件抽象层(S1/S2): 并行基线模型 -> 归一化采样流
+    //   换 SPI 型号时只改 IMPL 参数并在 hal/ 下实现驱动，应用层不动
+    //------------------------------------------------------------------
+    wire [15:0] adc_s_data;
+    wire        adc_s_valid, adc_locked, adc_error;
+
+    adc_top #(
+        .IMPL (1),      // 0=stub 1=par(基线) 2=spi
+        .RES  (10),
+        .ALIGN(0),      // 当前板载并行数据右对齐
+        .CH   (1)
+    ) u_adc (
+        .clk      (sys_clk),
+        .rst      (~sys_rst_n),
+        .csr_addr (8'd0),
+        .csr_wdata(32'd0),
+        .csr_we   (1'b0),
+        .csr_rdata(),
+        .adc_din  ({6'd0, ad_date}),
+        .spi_sclk (),
+        .spi_cs_n (),
+        .spi_mosi (),
+        .spi_miso (1'b0),
+        .s_data   (adc_s_data),
+        .s_ch     (),
+        .s_valid  (adc_s_valid),
+        .s_ready  (1'b1),
+        .locked   (adc_locked),
+        .error    (adc_error)
     );
 
     //------------------------------------------------------------------
@@ -122,6 +162,11 @@ module adda_scope_top (
     wire [15:0] c_tb;
     wire        c_run, c_ten, c_edg, c_scr;
     wire [9:0]  c_lvl;
+    wire        c_tmode_we, c_tsrc_we, c_pre_we, c_hold_we;
+    wire [1:0]  c_tmode;
+    wire        c_tsrc;
+    wire [9:0]  c_pre;
+    wire [15:0] c_hold;
 
 //------------------------------------------------------------------
 // [APP] 把字节流解析成“写使能 + 数值”，送给 vga_scope_top 的 cfg_* 端口。
@@ -142,7 +187,15 @@ module adda_scope_top (
         .edg_we  (c_edg_we),
         .edg_val (c_edg),
         .scr_we  (c_scr_we),
-        .scr_val (c_scr)
+        .scr_val (c_scr),
+        .tmode_we(c_tmode_we),
+        .tmode_val(c_tmode),
+        .tsrc_we (c_tsrc_we),
+        .tsrc_val(c_tsrc),
+        .pre_we  (c_pre_we),
+        .pre_val (c_pre),
+        .hold_we (c_hold_we),
+        .hold_val(c_hold)
     );
 
     //------------------------------------------------------------------
@@ -175,9 +228,10 @@ module adda_scope_top (
             ) u_scope (
                 .clk       (sys_clk),
                 .rst       (~sys_rst_n),
-                .ch0_in    (ad_date),
+                .ch0_in    (adc_s_data[9:0]),
+                .adc_valid (adc_s_valid),
                 .ch1_in    (ad_out),
-                .key_in    (key_in),
+                .key_n     ({3'b111, key_in}),   // 高层版只有 1 个键(L)
                 .cfg_tb_we (c_tb_we),
                 .cfg_tb    (c_tb),
                 .cfg_run_we(c_run_we),
@@ -190,6 +244,14 @@ module adda_scope_top (
                 .cfg_edg   (c_edg),
                 .cfg_scr_we(c_scr_we),
                 .cfg_scr   (c_scr),
+                .cfg_tmode_we(c_tmode_we),
+                .cfg_tmode (c_tmode),
+                .cfg_tsrc_we(c_tsrc_we),
+                .cfg_tsrc  (c_tsrc),
+                .cfg_pre_we(c_pre_we),
+                .cfg_pre   (c_pre),
+                .cfg_hold_we(c_hold_we),
+                .cfg_hold  (c_hold),
                 .vga_rgb   (vga_rgb),
                 .vga_hs    (vga_hs),
                 .vga_vs    (vga_vs),

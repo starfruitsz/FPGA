@@ -1,0 +1,553 @@
+% =====================================================================
+%  ch19_sparkroad.tex -- 第 19 章 SparkRoad-V 移植与 TD 工程操作
+% =====================================================================
+\section{SparkRoad-V 移植与 TD 工程操作}
+
+本章记录把示波器从高云 GW5A 工程迁移到 \textbf{SparkRoad-V（Anlogic EG4S20BG256）}
+的顶层设计、引脚约束生成方式，以及完整的 TD 工程操作步骤。
+
+\subsection{目标板与器件}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 参数\\
+\midrule
+FPGA & Anlogic EG4S20BG256（Eagle 系列，BG256）\\
+系统时钟 & 24\,MHz 有源晶振（K14）\\
+VGA & GM7123 视频 DAC，24\,bit（RGB 各 8\,bit），HS/VS/CLK\\
+ADC & AD7606 模块（8 通道 16\,bit、200\,kSPS、±5V/±10V、SPI/并口）\\
+数码管 & 4 位，DIG\_1..4 + SEG\_A..H\\
+按键 & 5 个独立按键（BUTTON\_L/R/U/D/C）\\
+串口 & USB2UART（TX=F16，RX=E16）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{顶层结构}
+
+\file{sparkroad_scope_top.v} 的组成：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+模块 & 作用 & 说明\\
+\midrule
+\file{uart_rx} & 接收 115200 字节 & 24\,MHz 时钟\\
+\file{scope_cmd} & 示波器命令（T/R/A/L/E/S/M/C/P/H） & 产生 cfg 写脉冲\\
+\file{adc_cmd} & ADC 命令（R/O/S/K/N） & 产生 CSR 写\\
+\file{adc_ad7606_top} & AD7606 串行采集 + 归一化 & 10\,bit 输出\\
+\file{vga_scope_top} & 示波器显示 & 640$\times$480，PIX\_DIV=1\\
+\file{seg} & 数码管显示 AD 码值 & 4 位动态扫描\\
+\file{uart_tx} & 默认连续发送（可参数改为 1ms 一帧） & 16\,bit\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+信号流：AD7606 $\rightarrow$ ADC HAL（补码$\rightarrow$偏移二进制$\rightarrow$10\,bit）
+$\rightarrow$ 采集/触发/测量 $\rightarrow$ 图层合成 $\rightarrow$ VGA RGB444
+$\rightarrow$ 每 4\,bit 复制为 8\,bit $\rightarrow$ GM7123。
+
+\subsection{时钟与视频时序}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item 板载时钟 24\,MHz，直接作为像素时钟（\sig{PIX_DIV=1}）；
+  \item 640$\times$480 行场参数：H=640+16+96+48=800，V=480+10+2+33=525；
+  \item 场频 = 24\,MHz / (800$\times$525) $\approx$ 57.1\,Hz，属于显示器可接受范围；
+  \item 若要严格 59.94\,Hz，可用 PLL 产生 25.175\,MHz（需要 EG4 的 PLL IP）。
+\end{itemize}
+
+\subsection{引脚与约束生成}
+
+引脚不再手写约束，而是集中在一个 CSV：
+
+\begin{lstlisting}[style=vsnip]
+FPGA/src/adc/pins/board_pins.csv   # 信号,位宽,引脚(|分隔),说明
+tools/gen_adc_pins.py              # -> FPGA_TD/eg4/SparkRoad.adc
+\end{lstlisting}
+
+CSV 覆盖 20 个信号、51 个引脚（时钟、复位、按键、串口、VGA 24\,bit、
+数码管、AD7606 七根线）。修改接线只改 CSV，再运行脚本重新生成；
+脚本会检查位宽匹配与引脚重复。
+
+\subsubsection{手册核对（3.1.1 资源配置表）}
+
+引脚表以《SparkRoad 开发套件用户手册（全）》3.1.1 节为准，关键项如下：
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+信号 & 引脚 & 信号 & 引脚\\
+\midrule
+CLKIN（24\,MHz） & K14 & VGA\_HS & J3\\
+BUTTON\_L & H14 & VGA\_VS & J4\\
+BUTTON\_C & G11 & VGA\_CLK & H2\\
+SEG\_A..H & E3,B3,F4,E4,F5,D3,B2,A2 & VGA\_R0..R7 & K6,K3,K5,L4,M1,M2,L3,L5\\
+DIG\_1..4 & B1,C3,C2,F3 & VGA\_G0..G7 & L1,K2,K1,J1,H3,J6,H1,H5\\
+UART\_TX / RX & F16 / E16 & VGA\_B0..B7 & G1,F1,F2,E1,G3,E2,D1,C1\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+三个容易踩坑的极性/顺序：
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{数码管共阳}：段码低电平有效、位码高电平有效。顶层已取反：
+        \begin{lstlisting}[style=vsnip]
+assign sel = ~sel_i;
+assign seg = ~seg_i;
+        \end{lstlisting}
+  \item \textbf{LED 低电平点亮}（本设计未使用 LED）；
+  \item \textbf{VGA\_R 顺序}：手册给出 R0..R7 = K6,K3,K5,L4,M1,M2,L3,L5，
+        而官方 VGA demo 的约束把 R 序反过来。本工程按手册填写；
+        若上板后发现红色亮度异常，把 \file{board_pins.csv} 的 vga\_r 一行反转即可。
+\end{itemize}
+
+另外，板上有 \textbf{AD1..AD7} 七个模拟输入（对应板载 12-bit SAR ADC，
+管脚 R16/M10/P11/L10/P12/N12/M12），它们是模拟专用引脚，不能当数字 IO 用；
+本工程使用的是外接 \textbf{AD7606} 模块，接在树莓派排针的数字 IO 上
+（A7/A8/A10/A9/A5/A6/A3）。
+
+\subsection{TD 工程操作步骤}
+
+\subsubsection{环境要求（TD 5.6.5 SP5）}
+
+EG4/Eagle 器件库只随 \textbf{TD 5.6.x} 提供，TD 6.0.3 只有 PH1/PH2。
+本机已安装：
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 内容\\
+\midrule
+安装路径 & \file{C:/Anlogic/TD_5.6.5_SP5_170.155}\\
+器件库 & \file{arch/eagle_20.db}（EG4S20），封装 \sig{BGA256X}\\
+工程文件 & \file{FPGA_TD/scope_eg4.al}（35 文件 + 约束，顶层 \sig{sparkroad_scope_top}）\\
+License & \file{license/Anlogic.lic}（必需，见下）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{License}
+
+TD 5.6 综合需要 \file{license/Anlogic.lic}，缺失时 \sig{optimize_rtl} 会报
+\sig{Cannot find license file}。申请方式：安路官网账号 $\rightarrow$ 工具与资料下载
+$\rightarrow$ License（或联系 FAE），提供本机 MAC 地址
+\sig{40-A5-EF-5E-1D-40}；拿到后放入
+\file{C:/Anlogic/TD_5.6.5_SP5_170.155/license/Anlogic.lic}。
+
+\subsubsection{创建工程（Tcl）}
+
+\begin{lstlisting}[style=vsnip]
+cd <repo>/FPGA_TD/eg4
+create_project -family eg4 -device EG4S20BG256 EG4S20BG256_scope .
+import_device eg4_20.db -package BG256 -speed 5
+add_files -list ./files.list
+top_module sparkroad_scope_top
+exit
+\end{lstlisting}
+
+\subsubsection{图形界面步骤}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 打开 \file{FPGA_TD/EG4S20BG256_scope.al}（或按上节重建）；
+  \item 确认器件为 \sig{EG4S20BG256}，速度等级与板卡一致（默认 -5）；
+  \item 源文件应为 \textbf{37 个}，顶层设为 \sig{sparkroad_scope_top}；
+  \item 在约束集里加入 \file{FPGA_TD/eg4/SparkRoad.adc}；
+  \item Run Synthesis $\rightarrow$ Run Place \& Route $\rightarrow$ Generate Bitstream；
+  \item 用 TD Programmer 下载 \file{.bit} 到板卡。
+\end{enumerate}
+
+\subsubsection{约束文件格式}
+
+Anlogic TD 使用 \file{.adc}，每行一条：
+
+\begin{lstlisting}[style=vsnip]
+set_pin_assignment {clk} { LOCATION = K14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[0]} { LOCATION = L5; IOSTANDARD = LVCMOS33; }
+\end{lstlisting}
+
+\subsection{上板调试顺序}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 先断开 AD7606，烧录工程，确认 VGA 出现网格/文字（证明时钟、VGA、
+        图层链路正常）；
+  \item 接 AD7606 的 5V/GND 与七根信号线，串口发 \sig{N1} 使能、\sig{R1} 选 ±10V；
+  \item 给 IN1 输入 1\,kHz 正弦，观察波形；用 \sig{K} 调整采样间隔；
+  \item 再测试触发（\sig{A1}、\sig{L}、\sig{M}）与预触发（\sig{P}）。
+\end{enumerate}
+
+\subsection{串口命令}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+命令 & 作用 & 范围\\
+\midrule
+\sig{T<hex>} & 时基分频 & 0$\sim$FFFF\\
+\sig{R<hex>} & 运行/冻结（scope） & 0/1\\
+\sig{A<hex>} & 触发使能 & 0/1\\
+\sig{L<hex>} & 触发电平 & 0$\sim$3FF\\
+\sig{E<hex>} & 触发边沿 & 0/1\\
+\sig{S<hex>} & 滚动开关 & 0/1\\
+\sig{M<hex>} & 触发模式 & 0/1/2\\
+\sig{C<hex>} & 触发源 & 0/1\\
+\sig{P<hex>} & 预触发点数 & 0$\sim$3FF\\
+\sig{H<hex>} & 保持时间 & 0$\sim$FFFF\\
+\midrule
+\sig{R<hex>} & ADC 量程（adc\_cmd） & 0=±5V 1=±10V\\
+\sig{O<hex>} & 过采样 & 0$\sim$6\\
+\sig{S<hex>} & SCLK 半周期 & 0$\sim$FFFF\\
+\sig{K<hex>} & ADC 采样间隔 & 0$\sim$FFFF\\
+\sig{N<hex>} & ADC 使能 & 0/1\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+注意：\sig{R/S} 在示波器与 ADC 两个解析器中含义不同，但作用对象不同
+（一个写 VGA 参数，一个写 ADC CSR），互不影响。
+
+\subsection{已知限制}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item SparkRoad-V 无 DAC，CH1 暂接固定中点，仅 CH0 有效；
+  \item AD7606 串行模式当前只读 DOUTA 的 ch1$\sim$ch4（ch5$\sim$8 需接 DOUTB）；
+  \item 24\,MHz 像素时钟下场频约 57\,Hz，部分显示器可能需要 25.175\,MHz PLL；
+  \item 已在 TD 5.6.5 + EG4S20BG256 上完成综合/布局布线并生成比特流；尚未上板验证。
+\end{itemize}
+
+\subsection{验证}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项 & 结果\\
+\midrule
+TD 前端分析 & 37 个源文件通过\\
+端口连接检查 & 35 模块 / 47 处例化 / 0 错误\\
+约束生成 & 20 信号 / 51 引脚，无重复\\
+综合/上板 & 待具备 EG4 器件库的 TD 环境\\
+\bottomrule
+\end{tabular}
+\end{center}
+% =====================================================================
+%  ch19 追加：上板步骤 / 引脚设置 / 参数设置 教程
+% =====================================================================
+
+\subsection{综合与布局布线结果（TD 5.6.5）}
+
+在 TD 5.6.5 SP5 + EG4S20BG256 上完成综合、布局布线与比特流生成：
+
+\begin{center}
+\small
+\begin{tabular}{lrl}
+\toprule
+项目 & 结果 & 说明\\
+\midrule
+LUT & 1632 / 19600 & 8.33\%\\
+寄存器 & 832 / 19600 & 4.24\%\\
+DSP & 6 / 29 & 20.69\%\\
+BRAM & 4 / 64 & 6.25\%（两路采样缓存 + 字模）\\
+PAD & 51 / 188 & 27.13\%\\
+时钟约束 & 41.667\,ns（24\,MHz） & \file{SparkRoad.sdc}\\
+时序 & 0 setup / 0 hold 错误 & 最小周期 21.182\,ns（约 47\,MHz）\\
+比特流 & 634\,296 字节 & \file{scope\_eg4\_60.bit}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent 说明：Tcl 流程必须在\textbf{同一个会话}里完成建工程、加文件、综合与布局布线，
+否则生成脚本中的 \sig{import\_device} 参数为空：
+
+\begin{lstlisting}[style=vsnip]
+create_project -family eg4 -device EG4S20BG256 scope_eg4_59 .
+add_files ...（35 个源文件 + SparkRoad.adc + SparkRoad.sdc）
+top_module sparkroad_scope_top
+launch_runs syn_1
+wait_run syn_1
+launch_runs phy_1
+wait_run phy_1
+\end{lstlisting}
+
+\subsection{首次上板步骤}
+
+
+\subsubsection{硬件准备清单}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+物品 & 数量 & 说明\\
+\midrule
+SparkRoad-V 开发板 & 1 & EG4S20BG256\\
+Anlogic 下载器 & 1 & USB Cable，TD Programmer 使用\\
+AD7606 模块 & 1 & 8 通道 16\,bit，5V 供电\\
+杜邦线 & 10 根 & 7 根信号 + 5V + GND + 备用\\
+VGA 线 + 显示器 & 1 & 支持 640$\times$480@60\\
+USB 线（串口） & 1 & USB2UART，115200\\
+5V 电源 & 1 & 给 AD7606 模块供电（可用板载 5V 排针）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{接线表}
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+AD7606 引脚 & FPGA 引脚 & 说明\\
+\midrule
+CA + CB & A7 & 两根并接 A7（排针 3）\\
+BUSY & A8 & 输入（排针 5）\\
+CS & A10 & 输出，低有效（排针 7）\\
+RD/SCLK & A9 & 输出（排针 8）\\
+D7/DOUTA & A5 & 输入（排针 10）\\
+RST & A6 & 输出，高有效（排针 11）\\
+SER & 3.3V & 必须为高，串行模式（排针 1 或 17）\\
+RANGE & 悬空 & 默认 ±10V；接 GND 为 ±5V\\
+STBY & 3.3V & 正常 work\\
+OS0..OS2 & GND & 不过采样\\
++5V / GND & 排针 5V / GND & 模块供电，务必共地\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}
+AD7606 模拟输入为 $\pm$10\,V（或 $\pm$5\,V），\textbf{绝对不能}直接接到 FPGA 引脚；
+接线和插拔务必先断电。
+\end{warnbox}
+
+\subsubsection{上电前检查}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 用万用表确认 5V 与 GND 不短路；
+  \item 确认 SER 接 3.3V、STBY 接 3.3V、OS0..2 接 GND；
+  \item 确认下载器、VGA、串口都已连接；
+  \item 先不接模拟信号，空载上电。
+\end{enumerate}
+
+\subsubsection{首次下载}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 打开 TD（需 Eagle 器件库），打开 \file{FPGA_TD/EG4S20BG256_scope.al}；
+  \item 确认器件 \sig{EG4S20BG256}、顶层 \sig{sparkroad_scope_top}、37 个源文件；
+  \item 将 \file{FPGA_TD/eg4/SparkRoad.adc} 加入约束集；
+  \item Run Synthesis $\rightarrow$ Run Place \& Route $\rightarrow$ Generate Bitstream；
+  \item TD Programmer 选择 \file{.bit}，点击下载；
+  \item 下载完成后按一下复位键（BUTTON\_C）。
+\end{enumerate}
+
+\subsubsection{上电观察（按顺序）}
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{VGA}：应出现深蓝背景 + 网格 + 文本（第一页 AD/U/TB/VP/FR）；
+        无显示先查 24\,MHz、\sig{vga_clk}、HS/VS 约束；
+  \item \textbf{数码管}：应显示 AD 码值（0$\sim$1023），不亮先查位选极性；
+  \item \textbf{串口}：PC 打开 115200 串口，应能看到连续的数据流（默认连续发送）；
+  \item \textbf{ADC}：发 \sig{N1} 使能、\sig{R1} 选 ±10V，IN1 接 1\,kHz 正弦，
+        波形应出现在屏幕上；
+  \item \textbf{触发}：发 \sig{A1}、\sig{L200}、\sig{M1}，波形应稳定不再左右漂；
+  \item \textbf{预触发}：发 \sig{P100}，触发点应出现在屏幕中间偏左。
+\end{enumerate}
+
+\subsection{引脚设置教程}
+
+\subsubsection{CSV 格式}
+
+\file{FPGA/src/adc/pins/board_pins.csv} 每行：
+
+\begin{lstlisting}[style=vsnip]
+# 信号名,位宽,引脚(多位宽用 | 分隔，低位在前),说明
+vga_hs,1,J3,
+vga_r,8,L5|L3|M2|M1|L4|K5|K3|K6,R0..R7
+\end{lstlisting}
+
+\subsubsection{修改一个引脚}
+
+例如把 \sig{vga_hs} 从 J3 改到 J5：
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item 编辑 CSV 对应行：\sig{vga_hs,1,J5,}；
+  \item 运行 \sig{python tools/gen_adc_pins.py}；
+  \item 打开生成的 \file{FPGA_TD/eg4/SparkRoad.adc}，确认 \sig{vga_hs} 为 J5；
+  \item TD 中重新加载约束（或重启工程）；
+  \item 重新综合/布局布线。
+\end{enumerate}
+
+\subsubsection{新增一个信号}
+
+以 \sig{led0} 为例：
+
+\begin{enumerate}[leftmargin=2em,itemsep=2pt]
+  \item CSV 增加一行：\sig{led0,1,M3,用户 LED}；
+  \item 顶层增加端口 \sig{output wire led0} 并驱动它；
+  \item 运行生成脚本（脚本会检查引脚是否重复）；
+  \item 重新编译。
+\end{enumerate}
+
+\subsubsection{常见引脚错误}
+
+\begin{center}
+\small
+\begin{tabular}{lp{8cm}}
+\toprule
+现象 & 原因/处理\\
+\midrule
+Duplicate pin & 同一引脚被两个信号占用，脚本会报错\\
+Width mismatch & 位宽与引脚个数不一致\\
+Unknown device name & TD 缺 EG4 器件库\\
+IOSTANDARD 报错 & 该 bank 电压/标准不匹配，改 LVCMOS33 或换引脚\\
+时钟不进 & 时钟必须接专用时钟引脚（本板 K14）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{参数设置教程}
+
+\subsubsection{三层参数}
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+层级 & 位置 & 生效方式 & 示例\\
+\midrule
+编译期 & 模块 parameter & 重新综合 & \sig{RES}、\sig{SDIV_DEF}、\sig{RANGE_DEF}\\
+寄存器 & CSR 地址 & 串口在线写 & 0x20 RANGE、0x24 OS、0x28 SDIV\\
+命令 & UART ASCII & 串口在线写 & \sig{R1}、\sig{O3}、\sig{S4}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{常用参数表}
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+参数 & 默认 & 范围 & 作用\\
+\midrule
+\sig{RES} & 10 & 8$\sim$16 & 输出位宽（16bit 补码取高 RES 位）\\
+\sig{SDIV_DEF} & 4 & 1$\sim$255 & SCLK 半周期（24MHz 下 SCLK=24M/(2*SDIV)）\\
+\sig{OS_DEF} & 0 & 0$\sim$6 & 过采样倍数 $2^n$\\
+\sig{RANGE_DEF} & 1 & 0/1 & 1=±10V，0=±5V\\
+\sig{DEPTH_LOG2} & 10 & 10 & 采样缓存 1024 点\\
+\sig{CLK_HZ} & 24\,MHz & — & 消抖/翻页计数基准\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{采样率设置示例}
+
+AD7606 转换周期约 64 个 SCLK + 转换时间；用 CSR 0x08（命令 \sig{K}）
+设置两次转换之间的时钟数：
+
+\begin{lstlisting}[style=vsnip]
+采样率 约 24MHz / K        （K = 0 时连续转换，约 40~70 kSPS）
+10 kSPS  -> K = 2399  -> 串口发 K95F
+1 kSPS   -> K = 23999 -> 串口发 K5DBF
+\end{lstlisting}
+
+\subsubsection{量程切换示例}
+
+\begin{lstlisting}[style=vsnip]
+R1   # ±10V（默认，模块 RANGE 悬空）
+R0   # ±5V（需要把模块 RANGE 接 GND，或由 RANGE 引脚驱动）
+\end{lstlisting}
+
+电压换算：±10V 时 $A(mV)=D\times10000/32768$；±5V 时 $A(mV)=D\times5000/32768$。
+
+\subsubsection{恢复默认}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item 按复位键：CSR 回到编译期默认值（SDIV\_DEF/OS\_DEF/RANGE\_DEF）；
+  \item 重新下载 bit：所有寄存器复位；
+  \item 改回编译期默认：修改模块 parameter 后重新综合。
+\end{itemize}
+
+\subsection{首次上板实录（2026-10-30）}
+
+本设计于 2026-10-30 完成首次上板，用的是\textbf{不接 AD7606、内部 50\,Hz 正弦 DDS}
+的演示版本（\file{sparkroad\_scope\_demo} / \file{sparkroad\_scope\_pll}）。
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+项目 & 结果 & 备注\\
+\midrule
+JTAG 连接 & 通过 & \sig{PRG-2014 Chip validation success: EAGLE\_S20\_BG256}\\
+比特流下载 & 通过 & 6.6\,s，\sig{download -bit ... -cable 0}\\
+VGA 显示 & 通过 & 640$\times$480，PLL 25.2\,MHz，场频 60\,Hz\\
+内部 50\,Hz 正弦 & 通过 & 静态显示，约 2.7 个周期\\
+数码管 & 段码极性待查 & 消隐位被显示成 8（P16，已知问题）\\
+串口 & 未验证 & 缺 USB 转 TTL 模块\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}
+\textbf{本次最耗时的故障不是设计问题，而是显示器——而且是一台坏了的显示器。}
+
+\textbf{症状}：刚上电画面很稳，放置几分钟后画面开始跳动，越放越严重；断电重启又恢复，
+如此循环反复。
+
+\textbf{根因}：该显示器（联想 E2323swA，2013 年左右的型号）的模拟前端存在\textbf{热漂移}。
+scaler 用 ADC 采样模拟 VGA 信号，采样相位依赖内部基准；开机后温度上升导致基准漂移，
+采样点逐渐偏离像素中心，采到数据跳变沿后画面即开始跳动。断电冷却后恢复，所以表现为
+「刚开机正常、过一会儿变差」。
+
+\textbf{最终处置}：更换显示器，问题彻底消失。\textbf{FPGA 输出自始至终是正确的。}
+
+\textbf{关键教训}：VGA 逐行扫描，同一列在所有扫描行读的是\textbf{同一个 RAM 地址}，
+FPGA 不可能产生「上半正常、下半异常」这种空间分割的图像。见到此类症状应第一时间
+怀疑显示器，而不是改时序——本次为此浪费了大量时间在时序/场频/PLL 上反复调试。
+\end{warnbox}
+
+\subsection{故障排查}
+
+\begin{center}
+\small
+\begin{tabular}{lp{8cm}}
+\toprule
+现象 & 排查方向\\
+\midrule
+VGA 无显示 & 24MHz 是否起振；\sig{vga_clk} 是否输出；HS/VS 引脚；显示器是否支持 57Hz\\
+画面花屏/抖动 & 像素时钟与数据未对齐；约束中 VGA 引脚接错；GM7123 供电\\
+颜色偏色 & RGB 高低位接反；某一路虚焊\\
+数码管不亮/乱码 & 位选/段选有效电平；扫描时钟；DIG/SEG 顺序\\
+ADC 无数据 & SER 是否为高；BUSY/CS/SCLK/DOUTA 接线；是否发 \sig{N1}\\
+波形不动 & RUN 是否冻结（\sig{R1}）；触发条件是否满足；采样率过低\\
+串口无响应 & 波特率 115200；TX/RX 是否交叉；是否共地\\
+触发不齐 & 触发电平/边沿设置；预触发点数；信号是否周期稳定\\
+\midrule
+\multicolumn{2}{l}{\textbf{2026-10-30 首次上板实测补充}}\\
+\midrule
+画面\textbf{上半正常、下半抖动}，改时序/场频/PLL 全部无效；\newline
+或「刚上电正常、几分钟后逐渐跳动」 &
+\textbf{显示器硬件故障（热漂移）}：断电重启只能暂时恢复，最终需换屏。注：VGA 逐行扫描，同一列在
+所有行读的是同一个 RAM 地址，FPGA 不可能产生「上半对、下半错」的空间分割——
+这类症状本身就是显示器侧的证据\\
+波形持续撕裂/重影（两条相位不同的曲线） &
+示波器\textbf{无双缓冲}：normal 模式边采集边显示，写指针会覆盖正在显示的区域。
+演示版改用 single 触发（采满一屏冻结）即可\\
+场频从 57.14\,Hz 提到 60\,Hz 后画面整幅晃动 &
+\textbf{不能靠压缩行同步}来凑场频：把 H\_SYNC 从 96 压到 58 像素(2.42\,$\mu$s) 后
+显示器锁不住行频。正确做法是用 PLL 出 25.2\,MHz（24$\times$21/20）跑标准时序\\
+TD 命令行报 \sig{PRG-9505 USB device open error} &
+JTAG 线被绑定到微软通用 WinUSB 驱动。装 TD 自带的
+\file{driver/al-link/win10/x64/anlocyusb.inf}：
+\sig{pnputil /add-driver <inf> /install}，设备会直接重绑为 Anlogic AL-Link\\
+\sig{rate\_cnt} 默认 49999 时示波器一个点都不采 &
+\file{scope\_capture.v} 的采样分频计数器缺少自增（P15，已修）\\
+\bottomrule
+\end{tabular}
+\end{center}

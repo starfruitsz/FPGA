@@ -3,7 +3,8 @@
 import io, os, re, sys
 
 ROOT = r'C:/Users/Administrator/Desktop/task/FPGA/src'
-DIRS = [ROOT, os.path.join(ROOT,'vga'), os.path.join(ROOT,'vga','hal'),
+DIRS = [ROOT, os.path.join(ROOT,'adc'), os.path.join(ROOT,'adc','hal'),
+        os.path.join(ROOT,'adc','abs'), os.path.join(ROOT,'adc','app'), os.path.join(ROOT,'vga'), os.path.join(ROOT,'vga','hal'),
         os.path.join(ROOT,'vga','abs'), os.path.join(ROOT,'vga','app')]
 
 files = {}

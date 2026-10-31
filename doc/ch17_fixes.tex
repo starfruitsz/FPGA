@@ -1,0 +1,217 @@
+% =====================================================================
+%  ch17_fixes.tex -- 第 17 章 缺陷修复分支（fix/review-p1-p11）
+% =====================================================================
+\section{缺陷修复分支（fix/review-p1-p11）}
+
+\subsection{分支约定与回退方法}
+
+第 2--13 章描述的是 \textbf{main 分支}上的原始设计；本章描述从 main 切出的修复分支
+\textbf{fix/review-p1-p11} 中的改动。为保证正文（尤其完整源码清单）与所描述的版本一致，
+第 2、4、5、9、10、13 章的源码清单已改为引用
+\file{doc/baseline/} 下从 main 导出的副本，本章则展示修复后的代码片段。
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项目 & 内容\\
+\midrule
+仓库 & \url{https://github.com/starfruitsz/FPGA}\\
+分支 & \file{fix/review-p1-p11}（基于 main 的 \sig{00a614c}）\\
+提交 & \sig{27694bf}（整批修复）、\sig{a63401d}（P9 回撤）、\sig{b34fff3}（P5 模式开关）\\
+回退 & \sig{git checkout main}；或对单个提交 \sig{git revert <commit>}\\
+基线源码 & \file{doc/baseline/}（main 上的 adda/eso/divider/seg/bcd/cst 副本）\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{修复清单}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{缺陷与修复一览}
+\begin{tabular}{clp{7.4cm}}
+\toprule
+编号 & 文件 & 修复内容\\
+\midrule
+P1 & \file{eso.v} & 参数锁存由 \sig{if/else-if} 优先级改为两个独立 \sig{if}，k 参数不再被“锁死”\\
+P2 & \file{eso.v} & 符号项 \sig{4'b1111}（补零后为 +15）改为 \sig{5'sd1 / -5'sd1}，恢复真正的 $\pm1$\\
+P3 & — & 复核后\textbf{撤销}：32bit 与 22bit 有符号相加只需 33bit，\sig{she} 宽度足够\\
+P4 & \file{bcd.v}、\file{seg.v} & BCD 扩展到 4 位并新增 \sig{thou}；seg 增加“千位优先”显示分支\\
+P5 & \file{adda.v}、\file{adda_scope_top.v} & 新增 \sig{UART_MODE} 开关（连续/标志位）与可配置 \sig{REPORT_MS} 上报周期\\
+P6 & \file{seg.v} & \sig{sel <= ~sel_reg[3:0]}，去掉隐式截断\\
+P7 & \file{seg.v} & 小数点索引加越界保护，仿真不再读 X\\
+P8 & \file{divider.v} & “500 分频”注释更正为 50000 分频\\
+P9 & — & \textbf{已回撤}：按需求保留 \sig{ad_clk}/\sig{da_clk} 输入端口（未使用，综合会裁剪）\\
+P10 & \file{adda.v} & 删除 \sig{initial}，改在块 5 的复位分支清 \sig{po_flag2}\\
+P11 & \file{.cst} & 补数码管 \sig{sel}/\sig{seg} 共 12 个引脚约束\\
+P12 & \file{.gprj} & 从工程文件列表移除未例化的 \file{gowin_pll.v}/\file{fifo_top.v}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{逐项代码解析}
+
+\subsubsection{P1：参数更新优先级}
+
+修复前（main）：
+
+\begin{lstlisting}[style=vsnip]
+else if(c_flag==1'b1)
+    c<=c_date;
+else if(k_flag==1'b1)
+    k<=k_date;
+else
+    begin c<=c; k<=k; end
+\end{lstlisting}
+
+顶层把两个标志置 1 后都不清零（这是有意为之——它要跨到 1kHz 的 \sig{ad_clk} 域，
+脉冲会丢），于是 \sig{c_flag} 一旦为 1，\sig{else if} 分支永远进不去，k 参数再也改不了。
+修复后改为两个互不排斥的独立 \sig{if}：
+
+\begin{lstlisting}[style=vsnip]
+if(c_flag==1'b1)
+    c<=c_date;
+if(k_flag==1'b1)
+    k<=k_date;
+\end{lstlisting}
+
+两个标志同时有效时 c、k 都更新；都无效时寄存器自动保持（\sig{always} 块特性），
+既保留了电平式跨时钟域的做法，又消除了优先级导致的功能失效。
+
+\subsubsection{P2：符号项 sgn}
+
+\begin{lstlisting}[style=vsnip]
+// 修复前
+wire signed [4 : 0] sgn;
+assign sgn = (she>1'd0) ? 1'd1 : 4'b1111;   // 4'b1111 补零后 = +15
+
+// 修复后
+assign sgn = (she > 0) ? 5'sd1 : -5'sd1;     // 真正的 +1 / -1
+\end{lstlisting}
+
+该改动会改变闭环控制律的偏置项，属于行为变化，切换后需要重新整定 \sig{c}/\sig{k}。
+
+\subsubsection{P4：4 位 BCD 与显示}
+
+原实现只保留 3 位 BCD（0$\sim$999），AD 码值 1000$\sim$1023 会丢掉千位。
+修复后移位寄存器由 22bit 扩到 26bit（16bit BCD + 10bit 二进制），加 3 修正从 3 组变 4 组：
+
+\begin{lstlisting}[style=vsnip]
+reg [25:0] data_shift;
+...
+data_shift[13:10] <= (data_shift[13:10] > 4) ? data_shift[13:10] + 2'd3 : data_shift[13:10];
+data_shift[17:14] <= ...;   data_shift[21:18] <= ...;
+data_shift[25:22] <= (data_shift[25:22] > 4) ? data_shift[25:22] + 2'd3 : data_shift[25:22];
+...
+thou <= data_shift[25:22];
+\end{lstlisting}
+
+用同样的算法做软件复算，$0/9/99/999/1000/1023$ 均正确（例如 1023 $\rightarrow$ 1\,0\,2\,3）。
+\file{seg.v} 中新增最高优先级的显示分支：
+
+\begin{lstlisting}[style=vsnip]
+else if(thou != 4'd0)
+    data_reg <= {thou,hun,ten,unit};     // 4 位数字，最左位是千位（不显示负号）
+\end{lstlisting}
+
+\subsubsection{P5：串口上报方式与速率}
+
+\file{adda.v} 新增三个参数，\sig{CNT_MAX} 由周期自动推导：
+
+\begin{lstlisting}[style=vsnip]
+parameter integer UART_MODE = 1,          // 0=连续发送 1=按标志位
+parameter integer CLK_FREQ  = 50_000_000,
+parameter integer REPORT_MS = 26,         // 上报周期(ms)
+parameter integer CNT_MAX   = (CLK_FREQ/1000)*REPORT_MS - 1;
+
+wire tx_req = (UART_MODE != 0) ? pi_flag : 1'b1;   // 模式选择
+...
+    .pi_flag(tx_req)                                // 送 uart_tx
+\end{lstlisting}
+
+计数器由 25bit 加宽到 32bit，支持最长约 85 秒的周期；\sig{UART_MODE} 为常数，
+未被选中的分支会被综合常量折叠。\file{adda_scope_top.v} 把两个参数透传到顶层：
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+模式 & 参数 & 效果\\
+\midrule
+连续发送（旧行为） & \sig{UART_MODE=0} & 发送器不停机，占满串口带宽\\
+定时上报（默认） & \sig{UART_MODE=1, REPORT_MS=26} & 每 26ms 一帧，约 38 帧/s\\
+高速上报 & \sig{UART_MODE=1, REPORT_MS=5} & 每 5ms 一帧\\
+低速上报 & \sig{UART_MODE=1, REPORT_MS=200} & 每 200ms 一帧\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+50MHz 下的计数值：26ms $\rightarrow$ 1\,299\,999；10ms $\rightarrow$ 499\,999；
+100ms $\rightarrow$ 4\,999\,999。
+
+\subsubsection{P6/P7：数码管细节}
+
+\begin{lstlisting}[style=vsnip]
+// P6：显式取低 4 位，不再依赖隐式截断
+sel <= ~sel_reg[3:0];
+
+// P7：point 只有 4bit，cnt_sel 可到 5，越界索引会读到 X
+dot_disp <= (cnt_sel <= 3'd3) ? point[cnt_sel[1:0]] : 1'b0;
+\end{lstlisting}
+
+\subsubsection{P9 回撤与 P10/P8/P12}
+
+\begin{itemize}[leftmargin=2em,itemsep=2pt]
+  \item \textbf{P9 已回撤}：按需求保留 \sig{ad_clk}/\sig{da_clk} 输入端口（顶层与 \sig{adda}
+        均恢复），端口未使用、综合时会自动裁剪，不增加资源；
+  \item \textbf{P10}：删除 \sig{initial} 初值，改为在块 5 复位分支中写
+        \sig{po_flag2<=1'b0}，不再依赖器件上电初值特性；
+  \item \textbf{P8}：\file{divider.v} 参数行注释由“500 分频”更正为“50000 分频（50MHz$\rightarrow$1kHz）”；
+  \item \textbf{P12}：\file{.gprj} 的 FileList 移除未例化的 PLL/FIFO（文件仍保留在仓库）。
+\end{itemize}
+
+\subsubsection{P11：数码管引脚约束}
+
+原工程只约束了 30 个引脚，\sig{sel[3:0]}/\sig{seg[7:0]} 是 PnR 自动布局的。
+修复后把实测引脚写入 \file{.cst}，约束总数变为 50 个：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lcccccccc}
+\toprule
+信号 & seg[0] & seg[1] & seg[2] & seg[3] & seg[4] & seg[5] & seg[6] & seg[7]\\
+\midrule
+引脚 & U18 & L14 & P16 & V16 & P12 & N15 & V13 & R11\\
+\midrule
+信号 & sel[0] & sel[1] & sel[2] & sel[3] & \multicolumn{4}{c}{}\\
+\midrule
+引脚 & N16 & U17 & N14 & T17 & \multicolumn{4}{c}{}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{验证与上板注意事项}
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+检查 & 结果\\
+\midrule
+TD 6.0.3 前端分析 & 27 个源文件通过\\
+端口连接静态检查 & 25 个模块、31 处例化、0 个未定义端口\\
+约束文件 & 50 个端口 / 50 个唯一引脚，无重复\\
+4 位 BCD 算法 & Python 复算 0/9/99/999/1000/1023 全部正确\\
+逻辑综合/时序/上板 & 待 Gowin EDA 与实板完成\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{warnbox}
+\textbf{行为变化提醒}：（1）P2 改变了控制律的偏置项，闭环动态会变，需重新整定
+$c$、$k$；（2）P5 默认从“连续发送”改为“26ms 一帧”，上位机若按连续流设计需要调整；
+（3）P4 在 $\ge$1000 时显示 4 位数字且不显示负号；（4）P9 回撤后端口数量与 main 一致。
+\end{warnbox}

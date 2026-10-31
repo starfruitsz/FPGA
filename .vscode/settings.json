@@ -1,0 +1,73 @@
+{
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+  "files.associations": {
+    "*.v": "verilog",
+    "*.vh": "verilog",
+    "*.sv": "systemverilog",
+    "*.cst": "plaintext",
+    "*.adc": "plaintext",
+    "*.sdc": "tcl",
+    "*.al": "xml",
+    "*.gprj": "xml"
+  },
+  "files.exclude": {
+    "**/_remote": true,
+    "**/_sparkroad": true,
+    "**/_sparkroad_adc": true,
+    "**/_ad7606": true,
+    "**/doc/rendered": true,
+    "**/Runs": true,
+    "**/*_Runs": true,
+    "**/impl": true,
+    "**/*.dmp": true,
+    "_*": true,
+    "**/*.log": true,
+    "**/*.logw": true,
+    "**/td_*": true,
+    "tools/ctags/ctags.exe": false
+  },
+  "search.exclude": {
+    "**/_remote": true,
+    "**/_sparkroad": true,
+    "**/_sparkroad_adc": true,
+    "**/_ad7606": true,
+    "**/*_Runs": true,
+    "**/impl": true,
+    "**/doc/rendered": true,
+    "**/*.pdf": true,
+    "**/*.log": true,
+    "_*": true,
+    "**/*.logw": true
+  },
+  "editor.rulers": [
+    100
+  ],
+  "editor.detectIndentation": false,
+  "editor.tabSize": 4,
+  "editor.insertSpaces": true,
+  "[verilog]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+  "[systemverilog]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+  "verilog.linting.linter": "none",
+  "verilog.formatting.verilogHDL.formatter": "verilog-format",
+  "workbench.startupEditor": "readme",
+  "explorer.compactFolders": false,
+  "breadcrumbs.enabled": true,
+  "verilog.ctags.path": "C:/Users/Administrator/Desktop/task/tools/ctags/ctags.exe",
+  "verilog.includeIndexing": [
+    "**/*.v",
+    "**/*.vh"
+  ],
+  "verilog.excludeIndexing": [
+    "**/_remote/**",
+    "**/*_Runs/**",
+    "**/impl/**",
+    "**/src_original_backup/**"
+  ]
+}

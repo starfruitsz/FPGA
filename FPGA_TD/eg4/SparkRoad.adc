@@ -1,0 +1,116 @@
+#### SparkRoad-V (EG4S20BG256) 引脚约束
+#### 由 tools/gen_adc_pins.py 从 board_pins.csv 生成，请勿手改
+
+#### clk 24MHz 有源晶振
+set_pin_assignment {clk} { LOCATION = K14; IOSTANDARD = LVCMOS33; }
+
+#### rst_n BUTTON_C 低有效
+set_pin_assignment {rst_n} { LOCATION = G11; IOSTANDARD = LVCMOS33; }
+
+#### key BUTTON_L
+set_pin_assignment {led[0]} { LOCATION = M3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[1]} { LOCATION = M4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[2]} { LOCATION = N3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[3]} { LOCATION = N4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[4]} { LOCATION = M5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[5]} { LOCATION = P4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[6]} { LOCATION = N5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[7]} { LOCATION = P5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[8]} { LOCATION = R7; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[9]} { LOCATION = T7; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[10]} { LOCATION = T8; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[11]} { LOCATION = T9; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[12]} { LOCATION = M7; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[13]} { LOCATION = R12; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[14]} { LOCATION = T12; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {led[15]} { LOCATION = T13; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[0]} { LOCATION = T4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[1]} { LOCATION = R5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[2]} { LOCATION = T5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[3]} { LOCATION = T6; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_l} { LOCATION = H14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_u} { LOCATION = J13; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_d} { LOCATION = G12; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {key_r} { LOCATION = L12; IOSTANDARD = LVCMOS33; }
+
+#### uart_tx USB2UART
+set_pin_assignment {uart_tx} { LOCATION = F16; IOSTANDARD = LVCMOS33; }
+
+#### uart_rx USB2UART
+set_pin_assignment {uart_rx} { LOCATION = E16; IOSTANDARD = LVCMOS33; }
+
+#### vga_clk GM7123 像素时钟
+set_pin_assignment {vga_clk} { LOCATION = H2; IOSTANDARD = LVCMOS33; }
+
+#### vga_hs 
+set_pin_assignment {vga_hs} { LOCATION = J3; IOSTANDARD = LVCMOS33; }
+
+#### vga_vs 
+set_pin_assignment {vga_vs} { LOCATION = J4; IOSTANDARD = LVCMOS33; }
+
+#### vga_r R0..R7（手册）
+set_pin_assignment {vga_r[0]} { LOCATION = K6; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[1]} { LOCATION = K3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[2]} { LOCATION = K5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[3]} { LOCATION = L4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[4]} { LOCATION = M1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[5]} { LOCATION = M2; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[6]} { LOCATION = L3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_r[7]} { LOCATION = L5; IOSTANDARD = LVCMOS33; }
+
+#### vga_g G0..G7
+set_pin_assignment {vga_g[0]} { LOCATION = L1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[1]} { LOCATION = K2; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[2]} { LOCATION = K1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[3]} { LOCATION = J1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[4]} { LOCATION = H3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[5]} { LOCATION = J6; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[6]} { LOCATION = H1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_g[7]} { LOCATION = H5; IOSTANDARD = LVCMOS33; }
+
+#### vga_b B0..B7
+set_pin_assignment {vga_b[0]} { LOCATION = G1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[1]} { LOCATION = F1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[2]} { LOCATION = F2; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[3]} { LOCATION = E1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[4]} { LOCATION = G3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[5]} { LOCATION = E2; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[6]} { LOCATION = D1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {vga_b[7]} { LOCATION = C1; IOSTANDARD = LVCMOS33; }
+
+#### seg SEG_A..H（共阳，低有效）
+set_pin_assignment {seg[0]} { LOCATION = E3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[1]} { LOCATION = B3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[2]} { LOCATION = F4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[3]} { LOCATION = E4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[4]} { LOCATION = F5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[5]} { LOCATION = D3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[6]} { LOCATION = B2; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {seg[7]} { LOCATION = A2; IOSTANDARD = LVCMOS33; }
+
+#### sel DIG_1..4（高有效）
+set_pin_assignment {sel[0]} { LOCATION = B1; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sel[1]} { LOCATION = C3; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sel[2]} { LOCATION = C2; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sel[3]} { LOCATION = F3; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_convst GPIO 建议(树莓派排针)
+set_pin_assignment {ad7606_convst} { LOCATION = A7; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_busy GPIO 建议
+set_pin_assignment {ad7606_busy} { LOCATION = A8; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_cs_n GPIO 建议
+set_pin_assignment {ad7606_cs_n} { LOCATION = A10; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_sclk GPIO 建议
+set_pin_assignment {ad7606_sclk} { LOCATION = A9; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_douta GPIO 建议
+set_pin_assignment {ad7606_douta} { LOCATION = A5; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_reset GPIO 建议
+set_pin_assignment {ad7606_reset} { LOCATION = A6; IOSTANDARD = LVCMOS33; }
+
+#### ad7606_ser GPIO 建议(或接 3.3V)
+set_pin_assignment {ad7606_ser} { LOCATION = A3; IOSTANDARD = LVCMOS33; }

@@ -7,6 +7,43 @@
 
 ---
 
+> **Agent 交接**：项目全貌、构建方式、引脚、当前状态与下一步见 [PROJECT_STATE.md](PROJECT_STATE.md)。
+
+## 0. 用 VS Code 阅读代码
+
+- 打开：`code C:\Users\Administrator\Desktop\task`；
+- 预配置：`.vscode/`（Verilog 关联、排除构建产物、5 个一键任务）；
+- 阅读指南：[CODE_READING_GUIDE.md](CODE_READING_GUIDE.md)（30 分钟路线 + 文件职责 + 搜索技巧）；
+- 工程全貌：[PROJECT_STATE.md](PROJECT_STATE.md)。
+
+## 0.5 RTL 仿真（Icarus Verilog）
+
+原工程与全部文档此前"仿真未做"。现已在 [sim/](sim) 建立回归环境，详见
+[sim/README.md](sim/README.md) 和文档**第 20 章**。
+
+```powershell
+# 一次性安装（约 26 MB，静默装到 C:\iverilog）
+powershell -Command "Invoke-WebRequest -Uri 'https://bleyer.org/icarus/iverilog-v14-20260804-x64_setup.exe' -OutFile $env:TEMP\iv.exe"
+$env:TEMP\iv.exe /S
+C:\iverilog\bin\iverilog.exe -V
+
+# 跑全部回归（14 个用例）
+powershell -ExecutionPolicy Bypass -File .\sim\run_all.ps1
+# 期望: TOTAL: PASS=14  FAIL=0  SKIP=0
+```
+
+要点：
+
+- **这是 RTL 行为级仿真**：iverilog 直接编译 `FPGA/src/**/*.v`，不经过综合；
+  验证逻辑功能与时钟级时序关系，**不验证**门延时、布线延时与建立保持时间；
+- 用例覆盖：`bcd`、`vga_timing`、`uart_tx`、`uart_rx`、`cmd_chain`（串口命令端到端）、
+  `scope_capture`、`scope_trigger`（触发锁相/滚动）、`adc_ad7606_spi`、`adc_ad7606_top`、
+  `vga_scope_top`（整屏，`PIX_DIV=1/2` 两套配置）；
+- 附带 [sim/ad7606_model.v](sim/ad7606_model.v)（AD7606 串行行为模型）
+  和 [sim/tb_dump.v](sim/tb_dump.v)（把真实输出像素导出成 PNG）；
+- 仿真抓到的缺陷见 [sim/README.md](sim/README.md) 第 5 节，其中 `PIX_DIV=1` 的
+  "最后一列丢失"已修复并重新综合为 `scope_eg4_61.bit`。
+
 ## 1. 交付物清单
 
 | 交付物 | 路径 | 说明 |
@@ -16,8 +53,8 @@
 | 建立工程脚本 | `FPGA_TD/make_prj.tcl` | 可重复执行，重建容器工程 |
 | 注释后源码 | `FPGA/src/**` | 17 个文件，仅新增 `//` 注释 |
 | 原始源码备份 | `FPGA/src_original_backup/**` | 注释前的逐字节副本 |
-| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 16 章（ch01–ch16）+ main/style/appendix |
-| 最终 PDF | `FPGA_project_analysis.pdf`（116 页） | 与 `doc/main.pdf` 相同 |
+| LaTeX 文档 | `doc/main.tex` + `doc/ch*.tex` + `doc/appendix.tex` | 20 章（ch01–ch20）+ main/style/appendix |
+| 最终 PDF | `FPGA_project_analysis.pdf`（139 页） | 与 `doc/main.pdf` 相同；第 17–19 章：修复记录 / 示波器 v2 / SparkRoad 移植；第 20 章：RTL 仿真环境 |
 | TD 打开截图 | `TD_open_project.jpg` | 层次树已识别 adda(7)/Gowin_PLL(1)/fifo_top(4) |
 | **VGA 示波器（分层）** | `FPGA/src/vga/**` | HAL/抽象/应用三层，引脚表与时基可配 |
 | VGA 屏幕预览 | `FPGA/src/vga/preview_640x480.png` | 用 Python 复现渲染结果的效果图 |
@@ -65,6 +102,30 @@ Top 已在综合工程设置中改为 `adda_scope_top`（`impl/gwsynthesis/*.prj
 
 ![TD 重新打开后的工程](TD_scope_project.jpg)
 
+## 1.2 ADC 硬件抽象层与 EG4 工程（新增）
+
+- `src/adc/`：HAL（stub/并行/SPI/AD7606 模板）+ ABS（归一化/CSR）+ 工厂 `adc_top`；
+- 应用层只认 `s_data / s_ch / s_valid / s_ready`，换型号只改 `IMPL` 与 `hal/` 下驱动；
+- 量程、过采样、SCLK、采样率均可通过 CSR/串口在线配置（`adc_cmd`：R/O/S/K/N）；
+- `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
+- `FPGA_TD/EG4S20BG256_scope.al`：按 **EG4S20BG256** 预制的 TD 工程（37 个文件、顶层 `sparkroad_scope_top`）；
+  已安装 **TD 5.6.5 SP5**（`C:\Anlogic\TD_5.6.5_SP5_170.155`，含 `arch/eagle_20.db`），
+- `FPGA_TD/scope_eg4_60.al`：TD 5.6.5 + EG4S20BG256 完整流程（37 个文件，顶层 `sparkroad_scope_top`）；
+  **已综合/布局布线成功**：LUT 1632/19600（8.33%）、REG 832、DSP 6/29、BRAM 4/64、PAD 51/188；
+  时序 0 setup/0 hold 错误（最小周期 21.182ns ≈ 47MHz）；比特流 `FPGA_TD/eg4/bit/scope_eg4_60.bit`（634,296 字节）。
+
+## 1.3 SparkRoad-V（EG4S20BG256）移植（新增）
+
+- 新顶层 `src/sparkroad_scope_top.v`：24MHz 时钟、VGA 24bit + `vga_clk`、AD7606(SPI) → CH0；
+- 引脚由 `src/adc/pins/board_pins.csv` 经 `tools/gen_adc_pins.py` 生成 `FPGA_TD/eg4/SparkRoad.adc`（51 引脚）；
+- **已按《SparkRoad 开发套件用户手册（全）》3.1.1 核对引脚**，修正三处：
+  1. 数码管为**共阳**（段低有效、位高有效），顶层对 `seg/sel` 取反；
+  2. **VGA_R 顺序**按手册 R0..R7 = K6,K3,K5,L4,M1,M2,L3,L5（官方 demo 约束顺序相反，若红色异常反转一行 CSV）；
+  3. 板载 **AD1..AD7** 是 12-bit SAR ADC 的**模拟专用引脚**，不能当数字 IO；外接 AD7606 用树莓派排针；
+- AD7606 接线（FPGA 引脚 / 40Pin 物理排针）：CA+CB=A7/3、BUSY=A8/5、CS=A10/7、SCLK=A9/8、
+  DOUTA=A5/10、RST=A6/11、SER=3.3V/1 或 17；
+- 报告第 19 章含：顶层结构、时钟/VGA、约束生成、TD 工程操作、**上板步骤、引脚教程、参数教程、故障排查、手册核对**。
+
 ## 2. 三步任务完成情况
 
 ### 2.1 用 TD 打开工程
@@ -95,6 +156,8 @@ exit
   仅有 `BAUD_CNT_MAX becomes localparam` 与加密 IP 密钥的预期告警，**无语法错误**。
 
 ### 2.3 LaTeX 文档
+
+> 📘 **产品使用手册**（面向使用者，讲按键/菜单/功能）：[`FPGA_scope_manual.pdf`](FPGA_scope_manual.pdf)
 
 `doc/main.pdf` 共 96 页，结构：
 
