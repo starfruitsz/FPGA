@@ -55,3 +55,43 @@
 - 参数是**有符号定点**，改值时要换算成十六进制补码（负值记得补码）；
 - 调参期间建议把触发设成自动/滚动，方便观察 u 的实时变化；
 - 如果 u 长期贴 0 或 1023（饱和），说明 b0 或观测器增益不合适，先把 b0 减半再调。
+
+---
+
+## 6. 离线调参完整步骤（主方式）
+
+### 6.1 改哪一行
+文件：FPGA/src/eso.v 第 91-94 行
+
+    parameter signed B01=21'd90;     // 观测器一阶增益
+    parameter signed B02=21'd2700;   // 观测器二阶增益
+    parameter signed B03=21'd27000;  // 观测器三阶增益
+    parameter signed b0 =16'd5000;   // 控制增益
+
+改数字即可，注意用 21'dxxx / 16'dxxx 的写法，且要满足 B01:B02:B03 约等于 3w0 : 3w0^2 : w0^3 的比例。
+
+### 6.2 新建构筑脚本（TD 不允许复用工程名）
+cd C:/Users/Administrator/Desktop/task/FPGA_TD
+copy full_flow_p28.tcl full_flow_p29.tcl
+（把文件里所有 p28 改成 p29、工程名 scope_eg4_p28 改成 scope_eg4_p29）
+
+### 6.3 综合
+Get-Content .\full_flow_p29.tcl | & 'C:\Anlogic\TD_5.6.5_SP5_170.155\bin\td_commands_prompt.exe' -nogui
+约 7 分钟；结束看 FPGA_TD/scope_eg4_p29_Runs/phy_1/run.log 里 Setup 的违规数必须为 0。
+
+### 6.4 烧写
+"download -bit C:/Users/Administrator/Desktop/task/FPGA_TD/scope_eg4_p29_Runs/best_result/scope_eg4_p29.bit -cable 0" | & 'C:\Anlogic\TD_5.6.5_SP5_170.155\bin\td_commands_prompt.exe' -nogui
+
+### 6.5 验证（SW8 拨上 = AD/DA 模式）
+1) CH0 看到 y（输入信号），CH1 看到 u（控制量），两路都稳定不饱和；
+2) 给阶跃输入，u 应在 1~2 个采样周期内收敛，y 超调 <10%；
+3) u 长期贴 0 或 1023 说明 b0 偏大或观测器偏大。
+
+### 6.6 记录与回退
+- 每版把参数写进下面的记录表；
+- 回退：把 4 个数改回 90/2700/27000/5000，重新走 6.2~6.4。
+
+### 6.7 参数版本记录
+| 版本 | B01 | B02 | B03 | b0 | 现象/结论 |
+|---|---|---|---|---|---|
+| p26-p28 | 90 | 2700 | 27000 | 5000 | 原工程默认值 |
