@@ -462,8 +462,13 @@ module vga_scope_top #(
         if (FEAT_SCROLL != 0) begin : g_scroll
             reg [DEPTH_LOG2-1:0] rd_base_s;
             always @(posedge clk) begin
-                if (rst)     rd_base_s <= {DEPTH_LOG2{1'b0}};
-                else if (hs) rd_base_s <= wa0;       // 每行更新 -> 纸带连续滚动
+                if (rst)        rd_base_s <= {DEPTH_LOG2{1'b0}};
+                // [2026-11-01 二次修复] 必须"每帧只更新一次"：
+                //   若每行(hs)更新，同一列的采样地址会随行号变大，一帧 525 行累计
+                //   偏移可达上百个像素 —— 波形斜成一条对角线（用户看到的"向右倾斜"）。
+                //   每帧锁一次基准，整屏用同一套地址，倾斜消失；代价是纸带按帧步进
+                //   （一帧前进多少像素由时基决定，一帧≈一屏时最顺滑）。
+                else if (frame) rd_base_s <= wa0;
             end
             wire [9:0] roll_ra = rd_base_s - roll_span + pxz;
             wire [9:0] ra0 = scroll_en ? roll_ra : (rd_base_d0 + pxz);

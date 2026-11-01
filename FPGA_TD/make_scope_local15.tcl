@@ -1,5 +1,5 @@
 cd D:/Desktop/fpga/FPGA_TD
-create_project -family eg4 -device EG4S20BG256 -speed -5 scope_local14 .
+create_project -family eg4 -device EG4S20BG256 -speed -5 scope_local15 .
 add_files ../FPGA/src/adda.v
 add_files ../FPGA/src/bcd.v
 add_files ../FPGA/src/divider.v
