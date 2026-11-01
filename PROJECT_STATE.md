@@ -255,11 +255,18 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local22.tcl`（43 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local24.tcl`（44 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local22_Runs/best_result/scope_local22.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local24_Runs/best_result/scope_local24.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 算法级 40~54Hz 带通（新增 `FPGA/src/vga/app/bpf_ctrl.v`）**
+> ADRC 的输入改成 `y = Filter(ADC) − Y_REF`，显示通路仍用原始 ADC。
+> 中心 47Hz / BW 14Hz（Q=3.357）/ fs=3.15MHz；Chamberlin SVF，状态 Q16(32bit)，
+> f=1573(Q24)、q=19521(Q16)，输出乘 q 归一化（中心增益=1）；-3dB 点实测 40.5/54.5Hz。
+> 6 拍状态机分时复用 2 个乘法器；`adrc_en` 改由 `bpf_ctrl.dvalid` 驱动。
+> ⚠️ 群延迟 2Q/ω0 ≈ 22.7ms，闭环调参要按此留相位裕度。
 
 > **2026-11-01 三项修复**
 > 1. **ADRC 参数已回退**：`eso.v` 恢复 `u=(k*(c*z1+z2)+sgn+c*z2-z3)>>>15`，c=150/k=20/b0=5000，

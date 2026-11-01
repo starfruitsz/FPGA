@@ -239,7 +239,22 @@ module sparkroad_scope_top #(
     wire adrc_on = sw6_lv;
 
     wire signed [10:0] y_ref = Y_REF;                     // 误差零点（默认 512）
-    wire signed [10:0] ad_y11 = $signed({1'b0, ad_val}) - y_ref;
+
+    //------------------------------------------------------------------
+    // [2026-11-01] 算法级带通：ADRC 的 y 用 40~54Hz 带通后的 ADC 值，
+    //   显示通路仍然用原始 ad_val（不受影响）。
+    //   y = Filter(ADC_value) - Y_REF，每来一个滤波结果才推进一次观测器。
+    //------------------------------------------------------------------
+    wire [9:0] ad_bpf;
+    wire       ad_bpf_v;
+    bpf_ctrl u_bpf_ctrl (
+        .clk(clk), .rst(rst),
+        .en(ad_val_valid && adc_mode),      // 每来一个 ADC 采样滤波一次
+        .din(ad_val),
+        .dout(ad_bpf), .dvalid(ad_bpf_v)
+    );
+
+    wire signed [10:0] ad_y11 = $signed({1'b0, ad_bpf}) - y_ref;
     wire signed [9:0]  ad_y   = ad_y11[9:0];        // -512..+511 正好装进 10bit 补码
     wire signed [9:0]  ad_y_eff = adrc_on ? ad_y : 10'sd0;   // SW6 拨下 -> y=0
     wire signed [9:0]  eso_u;                       // eso 输出的控制量 u（有符号补码）
@@ -253,7 +268,7 @@ module sparkroad_scope_top #(
                          (u_off > 11'sd1023) ? 10'd1023 : u_off[9:0];
 
     // 只有 AD/DA 模式才推进观测器；自发生模式整条 ADRC 链路保持
-    wire adrc_en = ad_val_valid && adc_mode && adrc_on;
+    wire adrc_en = ad_bpf_v && adrc_on;      // 用滤波结果的有效拍推进（已含 AD/DA 模式）
 
     eso u_eso (
         .ad_clk    (clk),           // 系统时钟域（不是 adclk）
