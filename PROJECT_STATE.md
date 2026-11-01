@@ -255,11 +255,17 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local13.tcl`（42 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local14.tcl`（42 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local13_Runs/best_result/scope_local13.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local14_Runs/best_result/scope_local14.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 修复滚动"纸带"右侧断线**（`vga_scope_top.v` g_scroll 段）：
+> 原来窗口起点写死 `-640`，只有 S=64 时右边沿才压在最新采样上，S>64 时窗口越过
+> 写指针 → 右半屏读到上一轮残留值，表现为"波形到屏幕中右部就断掉"。
+> 现在窗口宽度 = 实际跨度 `span=(639*S)>>6`，右边缘恒等于最新采样；
+> 且 `rd_base_s` 从"每帧更新"改成"每行(hs)更新"，纸带连续滚动不再整屏跳。
 
 > **2026-11-01 新增 SW14 / SW15（sw 总线扩到 16 位）**
 > - `sparkroad_scope_top/pll` 的 `sw` 端口从 `[8:0]` 扩到 `[15:0]`，

@@ -445,15 +445,29 @@ module vga_scope_top #(
     wire [16:0] px_mul = px[9:0] * {10'b0, hscale};
     wire [9:0]  pxz    = px_mul[15:6];
 
+    //------------------------------------------------------------------
+    // [2026-11-01 修复] 滚动模式"纸带"的两个问题：
+    //   1) 原来窗口起点写死 -640，只在 S=64 时右边沿才正好压在最新采样上；
+    //      S>64（缩小、一屏点数 >640）时窗口会越过写指针，右半屏读到的是
+    //      上一轮残留数据 —— 表现就是"波形到屏幕中右部就断掉/消失"。
+    //      现在窗口宽度改成实际跨度 span=(639*S)>>6，最新采样永远贴在最右侧
+    //      （px=639 时 pxz==span -> 地址正好是 rd_base_s）。
+    //   2) 原来 rd_base_s 只在 frame 更新一次，一帧内不动、换帧整屏跳一大截，
+    //      看着很顿。现在改成每行(hs)更新一次（525 次/帧），纸带是连续滚动的。
+    //------------------------------------------------------------------
+    wire [16:0] roll_mul  = 17'd639 * {10'b0, hscale};
+    wire [9:0]  roll_span = roll_mul[15:6];          // = (639*S)>>6，最大 1018
+
     generate
         if (FEAT_SCROLL != 0) begin : g_scroll
             reg [DEPTH_LOG2-1:0] rd_base_s;
             always @(posedge clk) begin
-                if (rst)        rd_base_s <= {DEPTH_LOG2{1'b0}};
-                else if (frame) rd_base_s <= wa0;
+                if (rst)     rd_base_s <= {DEPTH_LOG2{1'b0}};
+                else if (hs) rd_base_s <= wa0;       // 每行更新 -> 纸带连续滚动
             end
-            wire [9:0] ra0 = scroll_en ? (rd_base_s - 10'd640 + pxz) : (rd_base_d0 + pxz);
-            wire [9:0] ra1 = scroll_en ? (rd_base_s - 10'd640 + pxz) : (rd_base_d1 + pxz);
+            wire [9:0] roll_ra = rd_base_s - roll_span + pxz;
+            wire [9:0] ra0 = scroll_en ? roll_ra : (rd_base_d0 + pxz);
+            wire [9:0] ra1 = scroll_en ? roll_ra : (rd_base_d1 + pxz);
             // 滚动模式是"纸带式实时"，必须显示正在写入的那半（采集侧此时不会翻半区）；
             // 触发刷新模式显示已采完的那半（乒乓双缓冲，不截断）
             assign raddr0 = {scroll_en ? buf_wr0 : buf_disp0, ra0};
