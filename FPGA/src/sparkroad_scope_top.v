@@ -278,6 +278,29 @@ module sparkroad_scope_top #(
     wire [9:0] adrc_da = (u_off < 11'sd0)    ? 10'd0    :
                          (u_off > 11'sd1023) ? 10'd1023 : u_off[9:0];
 
+    //------------------------------------------------------------------
+    // [2026-11-01] 上电保护：等 ADC 连续输出 4096 个有效采样后才允许采集。
+    //   否则若上电时 SW1 拨在"冻结"，会把 ADC 尚未就绪时的全 0 数据锁进缓冲，
+    //   屏幕表现为一条贴顶/贴底的平线（用户实测现象）。
+    //------------------------------------------------------------------
+    reg  [11:0] ad_ready_cnt;
+    reg         ad_ready;
+    always @(posedge clk) begin
+        if (rst) begin
+            ad_ready_cnt <= 12'd0;
+            ad_ready     <= 1'b0;
+        end
+        else if (!adc_mode) begin
+            ad_ready_cnt <= 12'd0;
+            ad_ready     <= 1'b0;
+        end
+        else if (ad_val_valid && !ad_ready) begin
+            if (ad_ready_cnt >= 12'd4095) ad_ready <= 1'b1;
+            else                          ad_ready_cnt <= ad_ready_cnt + 12'd1;
+        end
+    end
+    wire sw_run_eff = sw1_lv | ~ad_ready;   // =1 表示冻结
+
     // 只有 AD/DA 模式才推进观测器；自发生模式整条 ADRC 链路保持
     // ADRC 仍按 3.15MHz 采样推进，y 用保持住的带通输出（观测器带宽不必重算）
     wire adrc_en = ad_val_valid && adc_mode && adrc_on;
@@ -378,7 +401,7 @@ module sparkroad_scope_top #(
         .sw_filt   (sw15_lv),      // SW15: 送显示前过 50Hz 带通
         .key_n     (key_n),
         .sw_menu   (sw0_lv),          // 电平：拨上=菜单开
-        .sw_run    (sw1_lv),          // 电平：拨上=运行
+        .sw_run    (sw_run_eff),      // 电平：拨上=冻结；ADC 未就绪时强制冻结
         .sw_page   (sw2_lv),          // 电平：拨上=信号源页
         .sw_roll   (sw3_lv),          // 电平：拨上=滚动模式（与串口 S 命令同源）
         .sw_roll2  (sw5_lv),          // SW5(P6) 滚动开关
