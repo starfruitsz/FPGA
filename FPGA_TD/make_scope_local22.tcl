@@ -1,5 +1,5 @@
 cd D:/Desktop/fpga/FPGA_TD
-create_project -family eg4 -device EG4S20BG256 -speed -5 scope_local20 .
+create_project -family eg4 -device EG4S20BG256 -speed -5 scope_local22 .
 add_files ../FPGA/src/adda.v
 add_files ../FPGA/src/bcd.v
 add_files ../FPGA/src/divider.v
@@ -43,6 +43,7 @@ add_files ../FPGA/src/vga/app/func_gen.v
 add_files ../FPGA/src/vga/app/sw_edge.v
 add_files ../FPGA/src/vga/abs/zoom_label.v
 add_files ../FPGA/src/vga/app/bpf50.v
+add_files ../FPGA/src/vga/app/dc_removal.v
 add_files ../FPGA/src/sparkroad_scope_pll.v
 add_files ./eg4/SparkRoad.adc
 top_module sparkroad_scope_pll

@@ -255,11 +255,20 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local20.tcl`（42 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local22.tcl`（43 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local20_Runs/best_result/scope_local20.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local22_Runs/best_result/scope_local22.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 三项修复**
+> 1. **ADRC 参数已回退**：`eso.v` 恢复 `u=(k*(c*z1+z2)+sgn+c*z2-z3)>>>15`，c=150/k=20/b0=5000，
+>    B01/B02/B03 不变（曾试 KP/KD/B0 经典形式，不合适已撤）。
+> 2. **ADC 直流偏置消除**（新增 `FPGA/src/vga/app/dc_removal.v`）：均值跟踪
+>    （时间常数≈1024 采样）后相减，只影响显示通路，AD/DA 模式启用；控制/触发/测量不受影响。
+> 3. **eso 输出限幅到 ±512**：原来直接取 `viout>>>15` 的低 10 位，超范围会回卷，
+>    导致"控制量打满/符号翻转看不出效果"；现在饱和在 DAC 码范围内。
+>    LED[15]/LED[14] 分别指示 SW14/SW15 被读到的状态，便于确认开关是否生效。
 
 > **2026-11-01 ADRC 控制律改为经典形式**（`eso.v` 级 6）：
 >   `u0 = KP*(Y_REF - z1) - KD*z2`，`u = (u0 - z3)/B0`，`DAC = clamp(u+512)`

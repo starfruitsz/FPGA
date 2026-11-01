@@ -494,7 +494,8 @@ module sparkroad_scope_top #(
         end
     end
 
-    wire [15:0] led_map = { 7'h00,          // 15:9 预留
+    // LED[15]=SW14 读到 1、LED[14]=SW15 读到 1（低电平点亮，亮 = 该位为 1）
+    wire [15:0] led_map = { sw14_lv, sw15_lv, 5'h00,   // 15:14 = SW14/SW15 状态，13:9 预留
                             sel_ch,          // 8 选中通道（1=CH1）
                             dbg_status[2],   // 7 运行
                             dbg_status[3],   // 6 滚动
