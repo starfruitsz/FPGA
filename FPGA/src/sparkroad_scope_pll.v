@@ -17,7 +17,7 @@ module sparkroad_scope_pll (
     input  wire        key_u,        // BUTTON_U (J13)
     input  wire        key_d,        // BUTTON_D (G12)
     input  wire        key_r,        // BUTTON_R (L12)
-    input  wire [8:0]  sw,           // SW0..SW8 拨动开关（SW8=N8 选工作模式）
+    input  wire [15:0] sw,           // SW0..SW15 拨动开关（SW8=N8 模式，SW14=T15 u符号，SW15=R15 50Hz滤波）
     output wire        uart_tx,
     input  wire        uart_rx,
     // 并口 AD/DA 模块（24 脚，AD0/DA0 为最低位）

@@ -27,7 +27,7 @@ module sparkroad_scope_top #(
     input  wire        key_u,        // J13 BUTTON_U
     input  wire        key_d,        // G12 BUTTON_D
     input  wire        key_r,        // L12 BUTTON_R
-    input  wire [8:0]  sw,           // SW0..SW8 (T4/R5/T5/T6/M6/P6/N6/P8, SW8=N8)
+    input  wire [15:0] sw,           // SW0..SW15 (T4/R5/T5/T6/M6/P6/N6/P8/N8/R9/P9/N9/T14/R14/T15/R15)
     // 串口
     output wire        uart_tx,      // F16
     input  wire        uart_rx,      // E16
@@ -134,6 +134,10 @@ module sparkroad_scope_top #(
     // SW8(N8)：工作模式（拨上=ADC 模式，拨下=自发生模式）
     wire sw8_lv;
     sw_edge u_sw8 (.clk(clk), .rst(rst), .sw_in(sw[8]), .lv(sw8_lv), .rise());
+    // SW14(T15)：ADRC 控制量 u 的符号（拨上 = 取反）；SW15(R15)：50Hz 带通显示滤波
+    wire sw14_lv, sw15_lv;
+    sw_edge u_sw14 (.clk(clk), .rst(rst), .sw_in(sw[14]), .lv(sw14_lv), .rise());
+    sw_edge u_sw15 (.clk(clk), .rst(rst), .sw_in(sw[15]), .lv(sw15_lv), .rise());
     // 函数发生器参数：CH0/CH1 各一套，完全独立（菜单 P1 页分别调整）
     wire [1:0] gen_wave0, gen_wave1;
     wire [2:0] gen_freq0, gen_freq1;
@@ -240,7 +244,9 @@ module sparkroad_scope_top #(
     wire signed [9:0]  ad_y_eff = adrc_on ? ad_y : 10'sd0;   // SW6 拨下 -> y=0
     wire signed [9:0]  eso_u;                       // eso 输出的控制量 u（有符号补码）
     wire signed [9:0]  eso_u_eff = adrc_on ? eso_u : 10'sd0; // 断开时控制量归零
-    wire signed [10:0] u_off  = eso_u_eff + 11'sd512; // 偏移二进制，正常范围 0..1023
+    // SW14(T15)：控制律输出符号，拨上 = 取反(-1)，拨下 = 直通(+1)
+    wire signed [9:0]  eso_u_sgn = sw14_lv ? (10'sd0 - eso_u_eff) : eso_u_eff;
+    wire signed [10:0] u_off  = eso_u_sgn + 11'sd512; // 偏移二进制，正常范围 0..1023
 
     // clamp(u+512, 0, 1023)：u 正常不会越界，这里是对观测器发散/毛刺的兜底
     wire [9:0] adrc_da = (u_off < 11'sd0)    ? 10'd0    :
@@ -342,6 +348,7 @@ module sparkroad_scope_top #(
         .ch1_in    (ch1_val),
         .adc_valid (ch_val),
         .adc_mode  (adc_mode),     // ADC 模式: 关掉内置信号源(GEN_ENA)相关路径
+        .sw_filt   (sw15_lv),      // SW15: 送显示前过 50Hz 带通
         .key_n     (key_n),
         .sw_menu   (sw0_lv),          // 电平：拨上=菜单开
         .sw_run    (sw1_lv),          // 电平：拨上=运行

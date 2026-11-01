@@ -255,11 +255,18 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local12.tcl`（41 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local13.tcl`（42 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local12_Runs/best_result/scope_local12.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local13_Runs/best_result/scope_local13.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 新增 SW14 / SW15（sw 总线扩到 16 位）**
+> - `sparkroad_scope_top/pll` 的 `sw` 端口从 `[8:0]` 扩到 `[15:0]`，
+>   `.adc` 补齐 `sw[9..15]`（R9,P9,N9,T14,R14,T15,R15）。
+> - **SW14(T15)**：控制量符号，拨上 `u -> -u`（`eso_u_sgn`）。
+> - **SW15(R15)**：50Hz 带通显示滤波（`FPGA/src/vga/app/bpf50.v`，SVF/Q=5，
+>   系数按 `{adc_mode,tb_idx}` 查表，每采一点推进一步，直接写显示 RAM）。
 
 > **2026-11-01 垂直档位改为连续档 + SW6 控制 ADRC**
 > - 垂直缩放从"右移位数 vs(2..7)"改成 **Q12 增益**：`z=(s-512)*vgain/4096`，

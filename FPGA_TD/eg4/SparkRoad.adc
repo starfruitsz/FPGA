@@ -33,6 +33,13 @@ set_pin_assignment {sw[5]} { LOCATION = P6; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {sw[6]} { LOCATION = N6; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {sw[7]} { LOCATION = P8; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {sw[8]} { LOCATION = N8; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[9]} { LOCATION = R9; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[10]} { LOCATION = P9; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[11]} { LOCATION = N9; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[12]} { LOCATION = T14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[13]} { LOCATION = R14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[14]} { LOCATION = T15; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {sw[15]} { LOCATION = R15; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {key_l} { LOCATION = H14; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {key_u} { LOCATION = J13; IOSTANDARD = LVCMOS33; }
 set_pin_assignment {key_d} { LOCATION = G12; IOSTANDARD = LVCMOS33; }

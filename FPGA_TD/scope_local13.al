@@ -2,7 +2,7 @@
 <Project Version="3" Minor="2" Path="D:/Desktop/fpga/FPGA_TD">
     <Project_Created_Time></Project_Created_Time>
     <TD_Version>5.6.170155</TD_Version>
-    <Name>scope_local12</Name>
+    <Name>scope_local13</Name>
     <HardWare>
         <Family>EG4</Family>
         <Device>EG4S20BG256</Device>
@@ -338,12 +338,20 @@
                     <Attr Name="CompileOrder" Val="41"/>
                 </FileInfo>
             </File>
-            <File Path="../FPGA/src/sparkroad_scope_pll.v">
+            <File Path="../FPGA/src/vga/app/bpf50.v">
                 <FileInfo>
                     <Attr Name="UsedInSyn" Val="true"/>
                     <Attr Name="UsedInP&R" Val="true"/>
                     <Attr Name="BelongTo" Val="design_1"/>
                     <Attr Name="CompileOrder" Val="42"/>
+                </FileInfo>
+            </File>
+            <File Path="../FPGA/src/sparkroad_scope_pll.v">
+                <FileInfo>
+                    <Attr Name="UsedInSyn" Val="true"/>
+                    <Attr Name="UsedInP&R" Val="true"/>
+                    <Attr Name="BelongTo" Val="design_1"/>
+                    <Attr Name="CompileOrder" Val="43"/>
                 </FileInfo>
             </File>
         </Verilog>

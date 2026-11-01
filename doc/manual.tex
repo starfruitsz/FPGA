@@ -392,7 +392,9 @@ SW5 & P6 & 滚动显示（纸带式） & \textbf{拨下 = 滚动}，拨上 = 触
 SW6 & N6 & \textbf{ADRC 闭环使能} & \textbf{拨上 = 闭环}（$y=ad\_val-Y_{ref}$，默认 $Y_{ref}=512$）；\textbf{拨下 = 断开}（$y$ 强制 0、$u$ 归零、DA 回中值）\\
 SW7 & P8 & U/D 语义 & 拨上 = 移动基线；拨下 = 调纵向档位\\
 SW8 & N8 & 采样模式 & \textbf{拨下 = 双内置信号源}；拨上 = AD/DA\\
-SW9$\sim$SW15 & R9,P9,N9,T14,R14,T15,R15 & 未使用 & —\\
+SW14 & T15 & \textbf{控制量 $u$ 符号} & \textbf{拨上 = 取反}（$u\to-u$）；拨下 = 正\\
+SW15 & R15 & \textbf{50Hz 带通显示滤波} & \textbf{拨上 = 开}；拨下 = 直通\\
+SW9$\sim$SW13 & R9,P9,N9,T14,R14 & 未使用 & —\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -443,6 +445,35 @@ $-$15.0 & $\times0.029$ & 13 & 只看整体包络\\
 
 配合档位使用：先把波形缩小，再上下平移，即可把不同幅度的两路信号
 \textbf{分开放置}，互不重叠。CH0 与 CH1 的位置独立可调。
+
+\subsection{显示滤波（SW15）}
+\label{sec:bpf}
+
+把 \textbf{SW15 拨上}后，送进显示缓冲的每个采样先经过一道
+\textbf{中心 50\,Hz、$Q=5$}（带宽 10\,Hz）的二阶带通滤波器（状态变量结构），
+再画到屏幕上：直流分量和高频噪声被压掉，50\,Hz 正弦变得平滑，采集/触发逻辑不受影响。
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+项 & 说明\\
+\midrule
+中心频率 & 50\,Hz（固定）\\
+品质因数 & $Q=5$（$-$3\,dB 带宽 10\,Hz）\\
+实现 & Chamberlin 状态变量滤波器，每采一个点推进一次\\
+系数 & $f=2\sin(\pi\cdot50/f_s)$，按当前时基/模式查表（16 档）\\
+拨下 & 直通，不滤波\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{只有慢时基才有效}：滤波器的中心频率恒为 50\,Hz，但最快几档的采样率高达
+数 MHz，此时 50\,Hz 相对采样率太低，系数会被量化成很小的值（几乎不起作用）。
+把一屏时间调到 \textbf{5\,ms$\sim$200\,ms}（能看到 50\,Hz 的 1$\sim$10 个周期）时效果最好。
+\end{tipbox}
+
 
 \subsection{时基}
 

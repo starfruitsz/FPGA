@@ -51,6 +51,7 @@ module vga_scope_top #(
     input  wire [9:0]  ch1_in,
     input  wire        adc_valid,   // ADC 采样有效(S2: 由 adc_top 提供)
     input  wire        adc_mode,      // 1=ADC 模式(SW8)：关闭内置信号源(GEN_ENA)相关路径
+    input  wire        sw_filt,       // SW15：1=送显示前过 50Hz 带通（波形平滑）
     input  wire [3:0]  key_n,         // {U,D,L,R} 4 个按键，低有效
     input  wire        sw_menu,       // SW0 上升沿: 菜单开/关
     input  wire        sw_run,        // SW1 上升沿: 运行/冻结
@@ -464,12 +465,69 @@ module vga_scope_top #(
         end
     endgenerate
 
+    //------------------------------------------------------------------
+    // SW15：50Hz 带通显示滤波（中心 50Hz / Q=5）
+    //   每采一个点（we 有效）推进一次滤波器，输出直接写进显示 RAM，
+    //   所以屏幕上看到的就是滤过的波形，采集/触发逻辑一点不受影响。
+    //   系数 f=2*sin(pi*50/fs) 由 {adc_mode, tb_idx} 查表给出（fs 随采样率变）。
+    //------------------------------------------------------------------
+    function [11:0] bpf_f_rom;
+        input wire m;          // 1=AD/DA 模式(样本 8clk 起) 0=自发生(2100clk 起)
+        input wire [3:0] i;
+        begin
+            case ({m, i})
+                // AD/DA 模式：fs = 25.2MHz / max(tb_div+1, 8)
+                5'd0 : bpf_f_rom = 12'd2512;
+                5'd1 : bpf_f_rom = 12'd1272;
+                5'd2 : bpf_f_rom = 12'd638;
+                5'd3 : bpf_f_rom = 12'd319;
+                5'd4 : bpf_f_rom = 12'd160;
+                5'd5 : bpf_f_rom = 12'd80;
+                5'd6 : bpf_f_rom = 12'd40;
+                5'd7 : bpf_f_rom = 12'd20;
+                5'd8 : bpf_f_rom = 12'd10;
+                5'd9 : bpf_f_rom = 12'd5;
+                5'd10: bpf_f_rom = 12'd2;
+                5'd11: bpf_f_rom = 12'd1;
+                5'd12: bpf_f_rom = 12'd0;
+                5'd13: bpf_f_rom = 12'd0;
+                5'd14: bpf_f_rom = 12'd0;
+                5'd15: bpf_f_rom = 12'd0;
+                // 自发生模式：func_gen 12kHz 起，fs = 25.2MHz / max(tb_div+1, 2100)
+                5'd16: bpf_f_rom = 12'd2512;
+                5'd17: bpf_f_rom = 12'd1272;
+                5'd18: bpf_f_rom = 12'd638;
+                5'd19: bpf_f_rom = 12'd319;
+                5'd20: bpf_f_rom = 12'd160;
+                5'd21: bpf_f_rom = 12'd107;
+                5'd22: bpf_f_rom = 12'd107;
+                5'd23: bpf_f_rom = 12'd107;
+                5'd24: bpf_f_rom = 12'd107;
+                5'd25: bpf_f_rom = 12'd107;
+                5'd26: bpf_f_rom = 12'd107;
+                5'd27: bpf_f_rom = 12'd107;
+                5'd28: bpf_f_rom = 12'd107;
+                5'd29: bpf_f_rom = 12'd107;
+                5'd30: bpf_f_rom = 12'd107;
+                default: bpf_f_rom = 12'd107;
+            endcase
+        end
+    endfunction
+
+    wire [11:0] bpf_f = bpf_f_rom(adc_mode, tb_idx);
+    wire [9:0]  ch0_f, ch1_f;
+
+    bpf50 u_bpf0 (.clk(clk), .rst(rst), .en(we0), .filt_on(sw_filt),
+                  .fcoef(bpf_f), .din(ch0_in), .dout(ch0_f));
+    bpf50 u_bpf1 (.clk(clk), .rst(rst), .en(we1), .filt_on(sw_filt),
+                  .fcoef(bpf_f), .din(ch1_in), .dout(ch1_f));
+
     vram_sdp #(.DW(10), .AW(DEPTH_LOG2+1)) u_ram0 (
-        .clk(clk), .we(we0), .waddr({buf_wr0, wa0}), .wdata(ch0_in),
+        .clk(clk), .we(we0), .waddr({buf_wr0, wa0}), .wdata(ch0_f),
         .raddr(raddr0), .rdata(s0)
     );
     vram_sdp #(.DW(10), .AW(DEPTH_LOG2+1)) u_ram1 (
-        .clk(clk), .we(we1), .waddr({buf_wr1, wa1}), .wdata(ch1_in),
+        .clk(clk), .we(we1), .waddr({buf_wr1, wa1}), .wdata(ch1_f),
         .raddr(raddr1), .rdata(s1)
     );
 
