@@ -255,11 +255,18 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local11.tcl`（41 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local12.tcl`（41 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local11_Runs/best_result/scope_local11.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local12_Runs/best_result/scope_local12.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 垂直档位改为连续档 + SW6 控制 ADRC**
+> - 垂直缩放从"右移位数 vs(2..7)"改成 **Q12 增益**：`z=(s-512)*vgain/4096`，
+>   默认 `vgain=1792`(=7/16)，`vstep` 每步 ±1 = ×1.125，范围 ±30 步 = `Y` ±15.0（约 1200:1）。
+>   相关：`trace_layer.v`(vgain)、`vga_scope_top.v`(gain_of 表 + vg_auto)、`scope_app.v`(vstep0/1)。
+> - **SW6(N6) = ADRC 闭环使能**：拨上闭环 `y=ad_val-Y_REF`（参数 `Y_REF` 默认 512）；
+>   拨下断开：`y` 强制 0、`u` 归零、DA 输出回中值 512。
 
 > **并口 AD/DA 引脚已补齐（2026-11-01）**：`ad0..ad9/adclk/da0..da9/daclk` 共 22 条以前完全没有约束，
 > TD 会乱放到无关管脚（曾出现 `adclk=D5`，模块收不到转换时钟 → ADC 恒 0、只剩 DA 有值）。

@@ -134,7 +134,8 @@ module vga_scope_top #(
 
     // 按键配置（由 scope_app 产生）
     wire        ch0_en, ch1_en;
-    wire [2:0]  vsc0, vsc1;
+    // 2026-11-01：垂直档位改为步进计数（每步 0.5 档，±30 步 = ±15.0 显示档）
+    wire signed [5:0] vstep0, vstep1;
     wire signed [9:0] hzoom10;      // 横轴缩放档 x10（scope_app 维护，每按键 0.5 档）
     wire [3:0]  pos0, pos1;          // 垂直位置档位 0..9（5=居中）
     wire        roll;
@@ -168,9 +169,98 @@ module vga_scope_top #(
         .peak_out(peak_auto), .busy(as_busy)
     );
 
-    // SW4 拨上：用自动档；拨下：回到手动档（菜单 VS 项/按键）
-    wire [2:0] vsc0_eff = sw_auto ? vs_auto : vsc0;
-    wire [2:0] vsc1_eff = sw_auto ? vs_auto : vsc1;
+    //------------------------------------------------------------------
+    // 垂直增益 Q12：z = (s-512)*vgain/4096
+    //   1792 = 7/16 = 原来的 vs=4（满量程铺满 448 像素）
+    //   手动档：vstep 每 +1 = x1.125（0.5 显示档），±30 步覆盖 x34.6 ~ /34.6
+    //   自动档(SW4 拨上)：用 scope_autoset 的 vs_out(2..7) 换算成 1792<<(4-vs)
+    //------------------------------------------------------------------
+    function [15:0] gain_of;
+        input signed [5:0] st;
+        reg [5:0] k;
+        begin
+            k = st + 6'sd30;
+            case (k)
+            6'd0: gain_of = 16'd52;
+            6'd1: gain_of = 16'd59;
+            6'd2: gain_of = 16'd66;
+            6'd3: gain_of = 16'd75;
+            6'd4: gain_of = 16'd84;
+            6'd5: gain_of = 16'd94;
+            6'd6: gain_of = 16'd106;
+            6'd7: gain_of = 16'd119;
+            6'd8: gain_of = 16'd134;
+            6'd9: gain_of = 16'd151;
+            6'd10: gain_of = 16'd170;
+            6'd11: gain_of = 16'd191;
+            6'd12: gain_of = 16'd215;
+            6'd13: gain_of = 16'd242;
+            6'd14: gain_of = 16'd272;
+            6'd15: gain_of = 16'd306;
+            6'd16: gain_of = 16'd345;
+            6'd17: gain_of = 16'd388;
+            6'd18: gain_of = 16'd436;
+            6'd19: gain_of = 16'd491;
+            6'd20: gain_of = 16'd552;
+            6'd21: gain_of = 16'd621;
+            6'd22: gain_of = 16'd698;
+            6'd23: gain_of = 16'd786;
+            6'd24: gain_of = 16'd884;
+            6'd25: gain_of = 16'd994;
+            6'd26: gain_of = 16'd1119;
+            6'd27: gain_of = 16'd1259;
+            6'd28: gain_of = 16'd1416;
+            6'd29: gain_of = 16'd1593;
+            6'd30: gain_of = 16'd1792;
+            6'd31: gain_of = 16'd2016;
+            6'd32: gain_of = 16'd2268;
+            6'd33: gain_of = 16'd2552;
+            6'd34: gain_of = 16'd2870;
+            6'd35: gain_of = 16'd3229;
+            6'd36: gain_of = 16'd3633;
+            6'd37: gain_of = 16'd4087;
+            6'd38: gain_of = 16'd4598;
+            6'd39: gain_of = 16'd5173;
+            6'd40: gain_of = 16'd5819;
+            6'd41: gain_of = 16'd6547;
+            6'd42: gain_of = 16'd7365;
+            6'd43: gain_of = 16'd8286;
+            6'd44: gain_of = 16'd9321;
+            6'd45: gain_of = 16'd10486;
+            6'd46: gain_of = 16'd11797;
+            6'd47: gain_of = 16'd13272;
+            6'd48: gain_of = 16'd14931;
+            6'd49: gain_of = 16'd16797;
+            6'd50: gain_of = 16'd18897;
+            6'd51: gain_of = 16'd21259;
+            6'd52: gain_of = 16'd23916;
+            6'd53: gain_of = 16'd26906;
+            6'd54: gain_of = 16'd30269;
+            6'd55: gain_of = 16'd34053;
+            6'd56: gain_of = 16'd38309;
+            6'd57: gain_of = 16'd43098;
+            6'd58: gain_of = 16'd48485;
+            6'd59: gain_of = 16'd54546;
+            6'd60: gain_of = 16'd61364;
+                default: gain_of = 16'd1792;
+            endcase
+        end
+    endfunction
+
+    reg [15:0] vg_auto;
+    always @(*) begin
+        case (vs_auto)
+            3'd2: vg_auto = 16'd7168;
+            3'd3: vg_auto = 16'd3584;
+            3'd4: vg_auto = 16'd1792;
+            3'd5: vg_auto = 16'd896;
+            3'd6: vg_auto = 16'd448;
+            default: vg_auto = 16'd224;
+        endcase
+    end
+
+    wire [15:0] vg0 = sw_auto ? vg_auto : gain_of(vstep0);
+    wire [15:0] vg1 = sw_auto ? vg_auto : gain_of(vstep1);
 
     // 精细居中：y = 223 - (s-512)*7/2^vs + voff，要把中点放在 y=223，
     // 就要 voff = +(mid-512)*7/2^vs（符号不能反：mid>512 时波形偏上，
@@ -180,10 +270,10 @@ module vga_scope_top #(
     //   所以两路一定同时完整落在 0..447 的绘图区里。
     wire signed [12:0] mid_d0 = $signed({3'b000, mid_auto0}) - 13'sd512;
     wire signed [12:0] mid_d1 = $signed({3'b000, mid_auto1}) - 13'sd512;
-    wire signed [12:0] fine_raw0 = (mid_d0 * 13'sd7) >>> vsc0_eff;
-    wire signed [12:0] fine_raw1 = (mid_d1 * 13'sd7) >>> vsc1_eff;
-    wire signed [12:0] fine0  = sw_auto ? fine_raw0 : 13'sd0;
-    wire signed [12:0] fine1  = sw_auto ? fine_raw1 : 13'sd0;
+    wire signed [14:0] fine_raw0 = (mid_d0 * $signed({1'b0, vg_auto})) >>> 12;
+    wire signed [14:0] fine_raw1 = (mid_d1 * $signed({1'b0, vg_auto})) >>> 12;
+    wire signed [12:0] fine0  = sw_auto ? fine_raw0[12:0] : 13'sd0;
+    wire signed [12:0] fine1  = sw_auto ? fine_raw1[12:0] : 13'sd0;
 
     //------------------------------------------------------------------
     // 基线夹紧（SW7 手动移基线时用）：两路共用 autoset 给的同一个对称峰值
@@ -194,8 +284,8 @@ module vga_scope_top #(
     //   饱和说明：peak<=1023、vs>=2 -> 220+zp <= 2010，13bit 有符号够用。
     //------------------------------------------------------------------
     wire signed [18:0] pk_x  = $signed({9'b0, peak_auto});
-    wire signed [18:0] zpk0  = (pk_x * 19'sd7) >>> vsc0_eff;
-    wire signed [18:0] zpk1  = (pk_x * 19'sd7) >>> vsc1_eff;
+    wire signed [18:0] zpk0  = (pk_x * $signed({1'b0, vg_auto})) >>> 12;
+    wire signed [18:0] zpk1  = (pk_x * $signed({1'b0, vg_auto})) >>> 12;
     wire signed [18:0] lim0  = 19'sd220 + zpk0;
     wire signed [18:0] lim1  = 19'sd220 + zpk1;
     wire signed [12:0] ylim0 = lim0[12:0];
@@ -262,7 +352,7 @@ module vga_scope_top #(
         .scroll_en(scroll_en), .tb_idx(tb_idx), .page(page), .state_o(state_o),
         .ev_short_o(), .ev_long_o(),
         .ch0_en(ch0_en), .ch1_en(ch1_en), .sel_ch(sel_ch_o),
-        .vs0(vsc0), .vs1(vsc1), .pos0(pos0), .pos1(pos1),
+        .vstep0(vstep0), .vstep1(vstep1), .pos0(pos0), .pos1(pos1),
         .roll(roll), .hscale(hscale), .yoff(yoff), .menu_page(menu_page),
         .hzoom10(hzoom10), .mode_chg(mode_chg),
         .sw_hzfree(sw_hzfree), .sw_move(sw_move),
@@ -447,13 +537,13 @@ module vga_scope_top #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH0)
     ) u_tr0 (.px(px_d), .py(py_d), .de(de_d), .en(ch0_en),
              .s_now(s0), .s_prev(s0_prev),
-             .vshift(vsc0_eff), .voff(voff0), .hit(t0_hit), .color(t0_col));
+             .vgain(vg0), .voff(voff0), .hit(t0_hit), .color(t0_col));
 
     trace_layer #(
         .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH1)
     ) u_tr1 (.px(px_d), .py(py_d), .de(de_d), .en(ch1_en),
              .s_now(s1), .s_prev(s1_prev),
-             .vshift(vsc1_eff), .voff(voff1), .hit(t1_hit), .color(t1_col));
+             .vgain(vg1), .voff(voff1), .hit(t1_hit), .color(t1_col));
 
     // 文本值：按 page 切换两组测量；菜单模式下锁定第 1 页显示"项号 + 当前值"
     wire        page_eff = menu_on ? 1'b0 : page;
@@ -488,9 +578,8 @@ module vga_scope_top #(
     wire        zl_hit;
     wire [11:0] zl_col;
 
-    wire [2:0] vs_sel = sel_ch_o ? vsc1 : vsc0;
-    // 纵轴档 x10：(4 - vs) x 0.5 档 -> vs 每减 1 记 +5(=+0.5 档)
-    wire signed [9:0] y10v = (10'sd4 - $signed({7'b0000000, vs_sel})) * 10'sd5;
+    // 底部 Y 档 x10：每步 0.5 档 -> vstep x 5（范围 ±150 = ±15.0）
+    wire signed [9:0] y10v = (sel_ch_o ? vstep1 : vstep0) * 6'sd5;
 
     zoom_label #(.X0(8), .Y0(464), .COL(COL_TEXT)) u_zoom (
         .px(px_d), .py(py_d), .de(de_d),
@@ -514,11 +603,15 @@ module vga_scope_top #(
     wire        menu_hit;
     wire [11:0] menu_col;
 
+    // 菜单里 VS0/VS1 显示成 0..15 的粗档（(vstep+30)/4），便于判断方向
+    wire [3:0] lvl0 = (vstep0 + 6'sd30) >> 2;
+    wire [3:0] lvl1 = (vstep1 + 6'sd30) >> 2;
+
     menu_layer u_menu (
         .px(px_d), .py(py_d), .de(de_d),
         .on(menu_on), .sel(menu_sel), .page(menu_page), .ena_sig(gen_ena_eff),
         .v0({3'd0, ch0_en}), .v1({3'd0, ch1_en}),
-        .v2({1'b0, vsc0}),   .v3({1'b0, vsc1}),
+        .v2(lvl0),           .v3(lvl1),
         .v4(pos0),           .v5(pos1),
         .v6(hscale[6:3]), .v7(tb_idx),   // HSC 显示 S/8（=8 即 1:1，十进制约 1.6x 一格）
         .v8({3'd0, roll}),

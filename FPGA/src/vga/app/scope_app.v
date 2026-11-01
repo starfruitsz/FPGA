@@ -88,8 +88,10 @@ module scope_app #(
     output reg         ch1_en,
     output reg         sel_ch,        // 选中通道 0=CH0 1=CH1：菜单关闭时由 SW2 决定，
                                       //   正常模式下 U/D 只调整它的垂直档位
-    output reg  [2:0]  vs0,           // 0..7 垂直档位（右移位数，越小波形越高）
-    output reg  [2:0]  vs1,
+    // 2026-11-01：垂直档位改成"步进计数"，每步 = 0.5 显示档（X 一样），范围 ±30
+    //   vstep=0 -> 1:1(7/16 满屏)，+30 -> ×34.6，-30 -> ÷34.6
+    output reg  signed [5:0] vstep0,
+    output reg  signed [5:0] vstep1,
     output reg  [3:0]  pos0,          // 垂直位置档位 0..9（5=居中）
     output reg  [3:0]  pos1,
     output wire        roll,          // 滚动状态别名，恒等于 scroll_en
@@ -257,8 +259,8 @@ module scope_app #(
             ch0_en     <= 1'b1;
             ch1_en     <= 1'b1;
             sel_ch     <= 1'b0;        // 上电默认选中 CH0
-            vs0        <= 3'd4;
-            vs1        <= 3'd4;
+            vstep0     <= 6'sd0;
+            vstep1     <= 6'sd0;
             pos0       <= 4'd5;
             pos1       <= 4'd5;
             hscale     <= HSC_1X;
@@ -301,18 +303,18 @@ module scope_app #(
                     //   两路各自夹紧在 2..7。
                     if (!sel_ch) begin
                         if (ev_us | ev_ul | ev_ur) begin
-                            if (vs0 > 3'd2) vs0 <= vs0 - 3'd1;  // CH0 放大
+                            if (vstep0 < 6'sd30) vstep0 <= vstep0 + 6'sd1;  // CH0 放大 0.5 档
                         end
                         if (ev_ds | ev_dl | ev_dr) begin
-                            if (vs0 < 3'd7) vs0 <= vs0 + 3'd1;  // CH0 缩小
+                            if (vstep0 > -6'sd30) vstep0 <= vstep0 - 6'sd1; // CH0 缩小
                         end
                     end
                     else begin
                         if (ev_us | ev_ul | ev_ur) begin
-                            if (vs1 > 3'd2) vs1 <= vs1 - 3'd1;  // CH1 放大
+                            if (vstep1 < 6'sd30) vstep1 <= vstep1 + 6'sd1;  // CH1 放大
                         end
                         if (ev_ds | ev_dl | ev_dr) begin
-                            if (vs1 < 3'd7) vs1 <= vs1 + 3'd1;  // CH1 缩小
+                            if (vstep1 > -6'sd30) vstep1 <= vstep1 - 6'sd1; // CH1 缩小
                         end
                     end
                 end
@@ -364,12 +366,12 @@ module scope_app #(
                             4'd0: begin ch0_en <= ~ch0_en; arm <= 1'b1; end
                             4'd1: begin ch1_en <= ~ch1_en; arm <= 1'b1; end
                             4'd2: begin
-                                if (ev_us && (vs0 > 3'd2)) vs0 <= vs0 - 3'd1;
-                                if (ev_ds && (vs0 < 3'd7)) vs0 <= vs0 + 3'd1;
+                                if (ev_us && (vstep0 < 6'sd30)) vstep0 <= vstep0 + 6'sd1;
+                                if (ev_ds && (vstep0 > -6'sd30)) vstep0 <= vstep0 - 6'sd1;
                             end
                             4'd3: begin
-                                if (ev_us && (vs1 > 3'd2)) vs1 <= vs1 - 3'd1;
-                                if (ev_ds && (vs1 < 3'd7)) vs1 <= vs1 + 3'd1;
+                                if (ev_us && (vstep1 < 6'sd30)) vstep1 <= vstep1 + 6'sd1;
+                                if (ev_ds && (vstep1 > -6'sd30)) vstep1 <= vstep1 - 6'sd1;
                             end
                             4'd4: begin
                                 if (ev_us && (pos0 > 4'd0)) pos0 <= pos0 - 4'd1;  // U=上移
@@ -458,6 +460,8 @@ module scope_app #(
                 tb_idx  <= 4'd15;
                 tb_div  <= 16'd0;
                 hzoom10 <= 10'sd0;
+                vstep0  <= 6'sd0;
+                vstep1  <= 6'sd0;
                 arm     <= 1'b1;
             end
 

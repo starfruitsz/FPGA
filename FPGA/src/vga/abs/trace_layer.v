@@ -29,7 +29,7 @@ module trace_layer #(
     input  wire        en,        // 通道使能
     input  wire [9:0]  s_now,     // 当前列采样
     input  wire [9:0]  s_prev,    // 前一列采样
-    input  wire [2:0]  vshift,    // 垂直档位: 右移位数(2..7)，越大波形越高
+    input  wire [15:0] vgain,     // 垂直增益 Q12: z = (s-512)*vgain/4096（1792 = 7/16 满屏）
     input  wire signed [12:0] voff,// 垂直位置偏移：(pos-5)*24 + 精细居中(±1900)
     output wire        hit,
     output wire [11:0] color
@@ -58,8 +58,11 @@ module trace_layer #(
 
     wire signed [14:0] d_now  = $signed({5'b00000, s_now})       - 15'sd512;
     wire signed [14:0] d_prev = $signed({5'b00000, s_prev_eff})  - 15'sd512;
-    wire signed [18:0] z_now  = (d_now  * 13'sd7) >>> vshift;
-    wire signed [18:0] z_prev = (d_prev * 13'sd7) >>> vshift;
+    // 2026-11-01：垂直档位由"右移位数"改成 Q12 增益，支持连续/更细的缩放
+    wire signed [30:0] p_now  = d_now  * $signed({1'b0, vgain});
+    wire signed [30:0] p_prev = d_prev * $signed({1'b0, vgain});
+    wire signed [18:0] z_now  = p_now  >>> 12;
+    wire signed [18:0] z_prev = p_prev >>> 12;
     wire signed [18:0] o      = $signed({{6{voff[12]}}, voff});
 
 //------------------------------------------------------------------

@@ -17,7 +17,8 @@
 module sparkroad_scope_top #(
     parameter integer CLK_HZ = 24_000_000,
     parameter integer TX_MODE = 0,       // 0=连续发送(默认) 1=每 1ms 一帧
-    parameter integer DEMO_SINE = 0      // 1=用内部 50Hz 正弦替代 ADC（不接 ADC 演示用）
+    parameter integer DEMO_SINE = 0,     // 1=用内部 50Hz 正弦替代 ADC（不接 ADC 演示用）
+    parameter integer Y_REF     = 512    // ADRC 误差零点：y = ad_val - Y_REF（SW6 拨上时生效）
 )(
     // 时钟/复位/按键
     input  wire        clk,          // K14 24MHz
@@ -227,23 +228,32 @@ module sparkroad_scope_top #(
     //------------------------------------------------------------------
     // 位宽：ad_val 是 0..1023 的无符号码，先补 1 位再做有符号减法，
     //       否则 >511 的码会被当成负数（10bit 有符号只有 -512..511）。
-    wire signed [10:0] ad_y11 = $signed({1'b0, ad_val}) - 11'sd512;
+    // 2026-11-01 新增：SW6(N6) = ADRC 闭环使能
+    //   拨下(0)：ADRC 断开 —— 误差输入 y 强制 0，观测器不推进，DA 输出回中值(Y_REF)
+    //   拨上(1)：ADRC 工作 —— y = ad_val - Y_REF（以 Y_REF 为零点，默认 512 = 中点）
+    //   想改成"归一化" y = ad_value/Y_REF 只需把下面的减法换成定标乘法（见注释）
+    wire adrc_on = sw6_lv;
+
+    wire signed [10:0] y_ref = Y_REF;                     // 误差零点（默认 512）
+    wire signed [10:0] ad_y11 = $signed({1'b0, ad_val}) - y_ref;
     wire signed [9:0]  ad_y   = ad_y11[9:0];        // -512..+511 正好装进 10bit 补码
+    wire signed [9:0]  ad_y_eff = adrc_on ? ad_y : 10'sd0;   // SW6 拨下 -> y=0
     wire signed [9:0]  eso_u;                       // eso 输出的控制量 u（有符号补码）
-    wire signed [10:0] u_off  = eso_u + 11'sd512;   // 偏移二进制，正常范围 0..1023
+    wire signed [9:0]  eso_u_eff = adrc_on ? eso_u : 10'sd0; // 断开时控制量归零
+    wire signed [10:0] u_off  = eso_u_eff + 11'sd512; // 偏移二进制，正常范围 0..1023
 
     // clamp(u+512, 0, 1023)：u 正常不会越界，这里是对观测器发散/毛刺的兜底
     wire [9:0] adrc_da = (u_off < 11'sd0)    ? 10'd0    :
                          (u_off > 11'sd1023) ? 10'd1023 : u_off[9:0];
 
     // 只有 AD/DA 模式才推进观测器；自发生模式整条 ADRC 链路保持
-    wire adrc_en = ad_val_valid && adc_mode;
+    wire adrc_en = ad_val_valid && adc_mode && adrc_on;
 
     eso u_eso (
         .ad_clk    (clk),           // 系统时钟域（不是 adclk）
         .sys_rst_n (rst_n),         // eso 的复位是低有效
         .en        (adrc_en),       // 每个有效采样推进一次（自发生模式保持）
-        .e_in      (ad_y),          // y = ad_val - 512（eso 内部会再取负）
+        .e_in      (ad_y_eff),      // y = ad_val - Y_REF（SW6 拨下时强制 0）
         .u_out     (eso_u),         // 控制量反馈：与 out_da 同源，构成 u(k-1)
         .out_da    (eso_u),
         .c_flag    (1'b0),          // 参数在线改写未启用：保持 c=150、k=20
