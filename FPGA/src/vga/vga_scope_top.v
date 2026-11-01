@@ -39,8 +39,10 @@ module vga_scope_top #(
     parameter [11:0] COL_BG   = 12'h012,
     parameter [11:0] COL_GRID = 12'h151,
     parameter [11:0] COL_AXIS = 12'h2A2,
-    parameter [11:0] COL_CH0  = 12'h1F1,
-    parameter [11:0] COL_CH1  = 12'hFF1,
+    // 通道配色：AD/DA 模式下 CH0=AD 采样、CH1=DA(ADRC u) 输出
+    //   2026-11-01 按要求改为 AD=黄色、DA=蓝色（原为绿/黄）
+    parameter [11:0] COL_CH0  = 12'hFF1,   // 黄：CH0（AD/DA 模式下 = 外部 AD 采样）
+    parameter [11:0] COL_CH1  = 12'h33F,   // 蓝：CH1（AD/DA 模式下 = DA 输出 / ADRC u）
     parameter [11:0] COL_TEXT = 12'hFFF
 )(
     input  wire        clk,

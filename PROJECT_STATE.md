@@ -251,11 +251,15 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local9.tcl`（41 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local10.tcl`（41 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local9_Runs/best_result/scope_local9.bit`（2026-11-01 已烧入 SRAM）。
+`scope_local10_Runs/best_result/scope_local10.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **通道配色（2026-11-01）**：AD/DA 模式下 CH0 = AD 采样、CH1 = DA(ADRC u)，
+> 按要求改为 **CH0 黄色 `12'hFF1`、CH1 蓝色 `12'h33F`**（原绿/黄），
+> 参数在 `vga_scope_top.v` 的 `COL_CH0 / COL_CH1`。
 
 > **2026-11-01 关键缺陷：约束文件缺 5 个拨码开关 + 全部 AD/DA 引脚**
 > `eg4/SparkRoad.adc` 原本只绑了 `sw[0..3]`(T4/R5/T5/T6)，**`sw[4..8]` 完全没约束**
