@@ -263,7 +263,7 @@ module scope_app #(
             vstep1     <= 6'sd0;
             pos0       <= 4'd5;
             pos1       <= 4'd5;
-            hscale     <= HSC_1X;
+            hscale     <= HSC_MAX;   // 一屏用满缓冲（自适应采样率模式）
             hzoom10    <= 10'sd0;
             yoff       <= 13'sd0;
             menu_page  <= 1'b0;
@@ -330,9 +330,13 @@ module scope_app #(
                 //         最慢档(S=93..102, tb_idx=0)整屏 ≈ 2.1s ≫ 500ms。
                 //   同时维护横轴缩放档计数 hzoom10：每按一次放大 +5、缩小 -5
                 //   （显示成 X:+0.5 / X:-0.5 …），夹紧在 ±300(=±30.0 档)。
+                // [2026-11-01 改] 横轴缩放改为"只调采样率"的自适应方式：
+                //   hscale 固定 HSC_MAX(102) —— 一屏正好用满 1018 个采样点，
+                //   所以缩放过程永远不会丢弃采样点，缩回去时点自然全都还在。
+                //   放大 = 采样率提高(tb_div 变小) -> 同样的点覆盖更短的时间；
+                //   缩小 = 采样率降低 -> 覆盖更长的时间。每按一次 X 记账 +0.5/-0.5。
                 if (ev_ls | ev_ll | ev_lr) begin
-                    if (hscale > HSC_MIN) hscale <= hsc_in(hscale);
-                    else if (tb_idx != 4'd15) begin
+                    if (tb_idx != 4'd15) begin
                         tb_idx <= tb_next;
                         tb_div <= tb_val(tb_next);
                         arm    <= 1'b1;
@@ -340,11 +344,9 @@ module scope_app #(
                     if (hzoom10 < 10'sd300) hzoom10 <= hzoom10 + 10'sd5;
                 end
                 if (ev_rs | ev_rl | ev_rr) begin
-                    if (hscale < HSC_MAX) hscale <= hsc_out(hscale);
-                    else if (tb_idx != 4'd0) begin
+                    if (tb_idx != 4'd0) begin
                         tb_idx <= tb_prev;
                         tb_div <= tb_val(tb_prev);
-                        hscale <= HSC_OUT_JOIN;
                         arm    <= 1'b1;
                     end
                     if (hzoom10 > -10'sd300) hzoom10 <= hzoom10 - 10'sd5;
@@ -456,7 +458,7 @@ module scope_app #(
             //   保证一换模式就能看到完整波形，不用先手动找时基；
             //   同时清零 X 档计数，屏幕上 X:0.0。
             if (mode_chg) begin
-                hscale  <= HSC_1X;
+                hscale  <= HSC_MAX;
                 tb_idx  <= 4'd15;
                 tb_div  <= 16'd0;
                 hzoom10 <= 10'sd0;
