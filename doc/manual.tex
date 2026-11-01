@@ -524,6 +524,66 @@ SW9$\sim$SW15 & R9,P9,N9,T14,R14,T15,R15 & 未使用 & —\\
 三位十进制，随按键立即变化。
 \end{tipbox}
 
+% ======================= 5.5 并口 AD/DA 接线 =======================
+\section{并口 AD/DA 接线}
+\label{sec:adda}
+
+外部 24 脚 AD/DA 模块（丝印 VCC/GND/AD0$\sim$AD9/ADCLK/DA0$\sim$DA9/DACLK）
+通过杜邦线接到 SparkRoad-V 的树莓派 GPIO 排针。引脚定义见下表，
+改引脚只需改 \file{FPGA/src/adc/pins/adda\_pins.csv} 后运行
+\file{tools/gen\_adda\_pins.py} 重新生成约束。
+
+\begin{center}
+\small
+\begin{tabular}{cccc}
+\toprule
+FPGA 端口 & 引脚 & 方向 & 模块侧\\
+\midrule
+AD0 & C9 & 输入\\
+AD1 & C8 & 输入\\
+AD2 & C5 & 输入\\
+AD3 & E8 & 输入\\
+AD4 & A14 & 输入\\
+AD5 & A4 & 输入\\
+AD6 & A12 & 输入\\
+AD7 & A10 & 输入\\
+AD8 & A6 & 输入\\
+AD9 & A7 & 输入\\
+ADCLK & A8 & FPGA 输出\\
+\bottomrule
+\end{tabular}
+\qquad
+\begin{tabular}{cccc}
+\toprule
+FPGA 端口 & 引脚 & 方向 & 模块侧\\
+\midrule
+DA0 & C7 & 输出\\
+DA1 & C11 & 输出\\
+DA2 & A11 & 输出\\
+DA3 & B16 & 输出\\
+DA4 & B15 & 输出\\
+DA5 & C15 & 输出\\
+DA6 & C16 & 输出\\
+DA7 & A5 & 输出\\
+DA8 & A9 & 输出\\
+DA9 & A13 & 输出\\
+DACLK & A3 & FPGA 输出\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tipbox}
+\textbf{ADCLK / DACLK 由 FPGA 输出，频率 = 系统时钟 / 8 = 3.15\,MHz}。
+AD 数据在 ADCLK 的反相沿锁存，DA 数据在 DACLK 的反相沿更新，外部模块在正相沿采样。
+\end{tipbox}
+
+\begin{tipbox}
+\textbf{模块必须与开发板共地}，逻辑电平 3.3\,V。上表引脚已避开 LED、数码管、VGA、
+串口、配置 Flash、拨码开关等所有已占用管脚，不要随意改动。
+\end{tipbox}
+
+% ======================= 6 触发系统 =======================
+
 % ======================= 6 触发系统 =======================
 \section{触发系统}
 

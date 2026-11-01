@@ -1,26 +1,26 @@
 # 24 脚并口 AD/DA 模块引脚表（SparkRoad-V GPIO 排针）
 # 列: 信号, FPGA引脚, 说明
-# 用法: 填好后运行  python tools/gen_adda_pins.py  -> 自动写入 FPGA_TD/eg4/SparkRoad.adc
-# 说明: 引脚留空 = 该信号暂不约束（生成脚本会跳过并提示）
-ad0,, 模块 AD0 -> 输入
-ad1,,
-ad2,,
-ad3,,
-ad4,,
-ad5,,
-ad6,,
-ad7,,
-ad8,,
-ad9,,
-adclk,, 模块 ADCLK <- FPGA 输出 3.15MHz
-da0,, 模块 DA0 <- 输出
-da1,,
-da2,,
-da3,,
-da4,,
-da5,,
-da6,,
-da7,,
-da8,,
-da9,,
-daclk,, 模块 DACLK <- FPGA 输出 3.15MHz
+# 用法: 改这张表 -> python tools/gen_adda_pins.py -> 自动写进 FPGA_TD/eg4/SparkRoad.adc
+# 来源: 2026-11-01 用户提供的接线表（Excel 第 3~24 行）
+ad0,C9,
+ad1,C8,
+ad2,C5,
+ad3,E8,
+ad4,A14,
+ad5,A4,
+ad6,A12,
+ad7,A10,
+ad8,A6,
+ad9,A7,
+adclk,A8,
+da0,C7,
+da1,C11,
+da2,A11,
+da3,B16,
+da4,B15,
+da5,C15,
+da6,C16,
+da7,A5,
+da8,A9,
+da9,A13,
+daclk,A3,

@@ -67,7 +67,11 @@
 | vga_b[0..7] | G1,F1,F2,E1,G3,E2,D1,C1 | |
 | seg[0..7] | E3,B3,F4,E4,F5,D3,B2,A2 | SEG_A..H |
 | sel[0..3] | B1,C3,C2,F3 | DIG_1..4 |
-| ad7606_convst | A7 | 排针 3 |
+| ad0..ad9 | C9,C8,C5,E8,A14,A4,A12,A10,A6,A7 | 24 脚并口 AD 数据（输入，上拉）|
+| adclk | A8 | FPGA 输出，3.15MHz |
+| da0..da9 | C7,C11,A11,B16,B15,C15,C16,A5,A9,A13 | 24 脚并口 DA 数据（输出）|
+| daclk | A3 | FPGA 输出，3.15MHz |
+| ad7606_convst（已停用） | A7 | 排针 3 |
 | ad7606_busy | A8 | 排针 5 |
 | ad7606_cs_n | A10 | 排针 7 |
 | ad7606_sclk | A9 | 排针 8 |
@@ -251,11 +255,16 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local10.tcl`（41 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local11.tcl`（41 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local10_Runs/best_result/scope_local10.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local11_Runs/best_result/scope_local11.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **并口 AD/DA 引脚已补齐（2026-11-01）**：`ad0..ad9/adclk/da0..da9/daclk` 共 22 条以前完全没有约束，
+> TD 会乱放到无关管脚（曾出现 `adclk=D5`，模块收不到转换时钟 → ADC 恒 0、只剩 DA 有值）。
+> 现按用户接线表写入 `eg4/SparkRoad.adc`（由 `FPGA/src/adc/pins/adda_pins.csv` +
+> `tools/gen_adda_pins.py` 生成），AD 脚还自动带上了上拉。
 
 > **通道配色（2026-11-01）**：AD/DA 模式下 CH0 = AD 采样、CH1 = DA(ADRC u)，
 > 按要求改为 **CH0 黄色 `12'hFF1`、CH1 蓝色 `12'h33F`**（原绿/黄），

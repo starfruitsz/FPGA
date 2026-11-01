@@ -105,3 +105,28 @@ set_pin_assignment {sel[3]} { LOCATION = F3; IOSTANDARD = LVCMOS33; }
 
 
 
+
+#### 并口 AD/DA 24 脚模块（由 tools/gen_adda_pins.py 生成，勿手改本段）
+set_pin_assignment {ad0} { LOCATION = C9; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad1} { LOCATION = C8; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad2} { LOCATION = C5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad3} { LOCATION = E8; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad4} { LOCATION = A14; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad5} { LOCATION = A4; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad6} { LOCATION = A12; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad7} { LOCATION = A10; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad8} { LOCATION = A6; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {ad9} { LOCATION = A7; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {adclk} { LOCATION = A8; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da0} { LOCATION = C7; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da1} { LOCATION = C11; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da2} { LOCATION = A11; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da3} { LOCATION = B16; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da4} { LOCATION = B15; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da5} { LOCATION = C15; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da6} { LOCATION = C16; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da7} { LOCATION = A5; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da8} { LOCATION = A9; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {da9} { LOCATION = A13; IOSTANDARD = LVCMOS33; }
+set_pin_assignment {daclk} { LOCATION = A3; IOSTANDARD = LVCMOS33; }
+#### 并口 AD/DA 段结束
