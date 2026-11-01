@@ -245,12 +245,23 @@ module sparkroad_scope_top #(
     //   显示通路仍然用原始 ad_val（不受影响）。
     //   y = Filter(ADC_value) - Y_REF，每来一个滤波结果才推进一次观测器。
     //------------------------------------------------------------------
+    // [2026-11-01] 先 512 点抽取到 6152Hz（抑制量化噪声/混叠），再做 48Hz 带通；
+    //   带通每 512 个 ADC 采样更新一次，结果保持给 ADRC 使用，ADRC 仍按 3.15MHz 推进
+    //   （观测器带宽 B01/B02/B03 因此无需重算）。
+    wire [9:0] ad_dec;
+    wire       ad_dec_v;
+    decim512 u_decim (
+        .clk(clk), .rst(rst),
+        .en(ad_val_valid && adc_mode),
+        .din(ad_val), .dout(ad_dec), .dvalid(ad_dec_v)
+    );
+
     wire [9:0] ad_bpf;
     wire       ad_bpf_v;
     bpf_ctrl u_bpf_ctrl (
         .clk(clk), .rst(rst),
-        .en(ad_val_valid && adc_mode),      // 每来一个 ADC 采样滤波一次
-        .din(ad_val),
+        .en(ad_dec_v),                      // 每 512 个采样滤波一次（6152Hz）
+        .din(ad_dec),
         .dout(ad_bpf), .dvalid(ad_bpf_v)
     );
 
@@ -268,7 +279,8 @@ module sparkroad_scope_top #(
                          (u_off > 11'sd1023) ? 10'd1023 : u_off[9:0];
 
     // 只有 AD/DA 模式才推进观测器；自发生模式整条 ADRC 链路保持
-    wire adrc_en = ad_bpf_v && adrc_on;      // 用滤波结果的有效拍推进（已含 AD/DA 模式）
+    // ADRC 仍按 3.15MHz 采样推进，y 用保持住的带通输出（观测器带宽不必重算）
+    wire adrc_en = ad_val_valid && adc_mode && adrc_on;
 
     eso u_eso (
         .ad_clk    (clk),           // 系统时钟域（不是 adclk）
