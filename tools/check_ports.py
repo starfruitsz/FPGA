@@ -2,7 +2,8 @@
 """Verilog 端口连接静态检查: 实例化里的 .port 必须存在于被例化模块的端口表"""
 import io, os, re, sys
 
-ROOT = r'C:/Users/Administrator/Desktop/task/FPGA/src'
+# [2026-11-02] 改成相对本脚本定位，换机器/换目录都能跑
+ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'FPGA', 'src')
 DIRS = [ROOT, os.path.join(ROOT,'adc'), os.path.join(ROOT,'adc','hal'),
         os.path.join(ROOT,'adc','abs'), os.path.join(ROOT,'adc','app'), os.path.join(ROOT,'vga'), os.path.join(ROOT,'vga','hal'),
         os.path.join(ROOT,'vga','abs'), os.path.join(ROOT,'vga','app')]

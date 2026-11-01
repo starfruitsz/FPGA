@@ -490,24 +490,22 @@ module vga_scope_top #(
     //   增益表在 bpf50.v 里按 {adc_mode, tb_idx} 给，50Hz 处基本不衰减。
     //------------------------------------------------------------------
     wire [9:0] ch0_f, ch1_f;
-    wire [9:0] ch0_dc, ch1_dc;
 
     //------------------------------------------------------------------
-    // ADC 直流偏置消除（AC 耦合）：均值跟踪 + 相减，只作用于显示通路。
-    //   只在 AD/DA 模式启用（自发生模式的信号源本身没有偏置）。
+    // [2026-11-02] 按用户要求**彻底移除**直流偏置消除（dc_removal）。
+    //   历史：一次性校零会锁死"上电第一个采样"，若那一刻 ADC 还没输出（din=0），
+    //   零点就被锁成 0，整条波形被整体 +512 抬高并削顶 —— 用户实测"y 轴几乎
+    //   没有、只剩一条贴顶的噪声带"。此后 dc_on 改接 1'b0（直通）仍然留着模块，
+    //   现在直接把例化删掉：显示通路 = 原始采样 -> bpf50 -> 显示 RAM。
+    //   屏幕上的纵向位置从此只由 ADC 原始码值决定（0 V 在哪里就画在哪里），
+    //   与显示层无关。dc_removal.v 文件保留但不再被例化（可随时找回）。
+    //   若要"上电自动居中"，应改用每帧均值 vmean 做静态重定位，不要再恢复本模块。
     //------------------------------------------------------------------
-    // [2026-11-01 关闭] 一次性校零会锁死"上电第一个采样"：若那一刻 ADC 还没输出
-    //   （din=0），零点就被锁成 0，整条波形被整体 +512 抬高并削顶 —— 表现为
-    //   "y 轴几乎没有、只剩一条贴顶的噪声带"。先直通，等确认采集通后再重新设计。
-    dc_removal u_dc0 (.clk(clk), .rst(rst), .en(we0), .dc_on(1'b0),
-                      .din(ch0_in), .dout(ch0_dc));
-    dc_removal u_dc1 (.clk(clk), .rst(rst), .en(we1), .dc_on(1'b0),
-                      .din(ch1_in), .dout(ch1_dc));
 
     bpf50 u_bpf0 (.clk(clk), .rst(rst), .en(we0), .filt_on(sw_filt),
-                  .adc_mode(adc_mode), .tb_idx(tb_idx), .din(ch0_dc), .dout(ch0_f));
+                  .adc_mode(adc_mode), .tb_idx(tb_idx), .din(ch0_in), .dout(ch0_f));
     bpf50 u_bpf1 (.clk(clk), .rst(rst), .en(we1), .filt_on(sw_filt),
-                  .adc_mode(adc_mode), .tb_idx(tb_idx), .din(ch1_dc), .dout(ch1_f));
+                  .adc_mode(adc_mode), .tb_idx(tb_idx), .din(ch1_in), .dout(ch1_f));
 
     vram_sdp #(.DW(10), .AW(DEPTH_LOG2+1)) u_ram0 (
         .clk(clk), .we(we0), .waddr({buf_wr0, wa0}), .wdata(ch0_f),
