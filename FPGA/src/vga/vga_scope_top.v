@@ -133,6 +133,7 @@ module vga_scope_top #(
     // 按键配置（由 scope_app 产生）
     wire        ch0_en, ch1_en;
     wire [2:0]  vsc0, vsc1;
+    wire signed [9:0] hzoom10;      // 横轴缩放档 x10（scope_app 维护，每按键 0.5 档）
     wire [3:0]  pos0, pos1;          // 垂直位置档位 0..9（5=居中）
     wire        roll;
     wire [6:0]  hscale;              // 横轴缩放系数 S(1..102): pxz=(px*S)>>6，64=1:1
@@ -261,6 +262,7 @@ module vga_scope_top #(
         .ch0_en(ch0_en), .ch1_en(ch1_en), .sel_ch(sel_ch_o),
         .vs0(vsc0), .vs1(vsc1), .pos0(pos0), .pos1(pos1),
         .roll(roll), .hscale(hscale), .yoff(yoff), .menu_page(menu_page),
+        .hzoom10(hzoom10), .mode_chg(mode_chg),
         .sw_hzfree(sw_hzfree), .sw_move(sw_move),
         // 两套完全独立的信号源参数（菜单 P1 的 0..3 改 CH0、4..7 改 CH1）
         .wave0(gen_wave0),  .fsel0(gen_freq0),  .asel0(gen_amp0),  .phase0(gen_phase0),
@@ -473,6 +475,28 @@ module vga_scope_top #(
         .hit(tx_hit), .color(tx_col)
     );
 
+    //------------------------------------------------------------------
+    // 底部分辨率标签： "X:+2 Y:-1 T=180U"
+    //   X = 横轴缩放档（+1 放大 1 档 / -1 缩小 1 档 / 0 不缩放）
+    //   Y = 纵轴缩放档（当前选中通道，SW2 切换时跟着换）
+    //   T = 整屏时间
+    //   位置 px 8..167 / py 464..471（第 58 字符行），波形区(py<448)与
+    //   状态文字(px 8..263 / py 448..463)都不占这块，不会重叠。
+    //------------------------------------------------------------------
+    wire        zl_hit;
+    wire [11:0] zl_col;
+
+    wire [2:0] vs_sel = sel_ch_o ? vsc1 : vsc0;
+    // 纵轴档 x10：(4 - vs) x 0.5 档 -> vs 每减 1 记 +5(=+0.5 档)
+    wire signed [9:0] y10v = (10'sd4 - $signed({7'b0000000, vs_sel})) * 10'sd5;
+
+    zoom_label #(.X0(8), .Y0(464), .COL(COL_TEXT)) u_zoom (
+        .px(px_d), .py(py_d), .de(de_d),
+        .hscale(hscale), .tb_idx(tb_idx), .adc_mode(adc_mode),
+        .x10(hzoom10), .y10(y10v),
+        .hit(zl_hit), .color(zl_col)
+    );
+
     wire [11:0] rgb_comp;
     compositor u_comp (
         .txt_hit(tx_hit), .txt_col(tx_col),
@@ -504,7 +528,9 @@ module vga_scope_top #(
         .hit(menu_hit), .color(menu_col)
     );
 
-    wire [11:0] rgb_comb = menu_hit ? menu_col : rgb_comp;
+    // 合成优先级：菜单 OSD > 底部倍数标签 > 文本/波形/网格
+    wire [11:0] rgb_comb = menu_hit ? menu_col :
+                           zl_hit   ? zl_col   : rgb_comp;
 
     //------------------------------------------------------------------
     // 输出寄存（2 拍 = 1 像素对齐）

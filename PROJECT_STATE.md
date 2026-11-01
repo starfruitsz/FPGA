@@ -169,7 +169,7 @@ ADC 命令（adc_cmd）：R=量程、O=过采样、S=SCLK 半周期、K=采样�
 | TD 版本 | 5.6.5 SP5（170.155） |
 | 安装路径 | C:/Anlogic/TD_5.6.5_SP5_170.155 |
 | 器件库 | arch/eagle_s20.db（EG4S20，package EG4S20BG256） |
-| License | license/Anlogic.lic（node-locked；本机 MAC 40-A5-EF-5E-1D-40） |
+| License | license/Anlogic.lic（官方公开 NODELOCKED 版，`HOST_ID = ANY`，有效期 2027-09-30，不绑 MAC） |
 | 工程 | FPGA_TD/scope_eg4_60.al（35 源文件 + .adc + .sdc） |
 | 顶层 | sparkroad_scope_top |
 | 比特流 | FPGA_TD/eg4/bit/scope_eg4_60.bit（634,296 字节） |
@@ -217,6 +217,76 @@ FPGA_TD/full_flow60.tcl：
 > PAD 51/188、setup slack +21.964 ns、0 setup / 0 hold 错误，
 > 比特流 `FPGA_TD/scope_eg4_61_Runs/best_result/scope_eg4_61.bit`（634296 B）。
 > 流程脚本 `FPGA_TD/full_flow61.tcl`。
+
+### 7.3 日常操作（2026-11-01 实测打通）
+
+| 操作 | 命令 |
+|---|---|
+| 打开工程（GUI） | `pwsh -File tools/td_open.ps1`（默认 scope_local4.al，可 `-Project xxx.al`） |
+| 烧入 SRAM（掉电丢失） | `pwsh -File tools/td_burn.ps1`（自动取最新 `*_Runs/best_result/*.bit`） |
+| GUI 里烧入 | TD → Tools → Programmer → 选 Cable → Program（SRAM） |
+
+**约定：固化（写 SPI Flash）由用户手动操作；agent 只做"综合 + 烧入 SRAM"，不碰 Flash。**
+
+下载器：`Anlogic AL-Link Mini`（`USB\VID_336C&PID_1002`），安路驱动 `anlocyusb.inf`
+（服务 `ANLOCYUSB`，发布名 `oem128.inf`）。若设备回退到微软 `winusb.inf`，TD 报
+`PRG-9505 USB device open error`，用管理员重装：
+
+    pnputil /add-driver "C:\Anlogic\TD_5.6.5_SP5_170.155\driver\al-link\win10\x64\anlocyusb.inf" /install
+
+固化参考（一般由用户做）：`create_flash_file` 生成带 `CC 55 AA 33` 头的镜像，再
+`download -bit <bit> -mode program_spi -chip EG4S20BG256 -flashsize 32 -cable 0 -spd 1`。
+**必须 `-spd 1`**：`-spd 4` 时 Flash ID 会读成全 1，报 `PRG-9516 unknown flash id`。
+本板 Flash 厂商 ID `0xC8`（GigaDevice GD25 系列）。
+
+### 7.4 本机 eg4 工程现状（2026-11-01）
+
+仓库里的 `scope_eg4_60.al / scope_eg4_61.al` 有两处历史问题，直接 `open_project` 后
+`launch_runs` 会失败：
+
+1. `<Speed></Speed>` 为空 → `import_device` 参数缺失 → `USR-8002 Cannot open file .`
+   （参照 `EG4S20BG256_scope.al` 的 `-5`）。
+2. `full_flow60.tcl` 的文件清单少了 5 个后来新增的模块：`ad_da_par.v`、
+   `vga/abs/menu_layer.v`、`vga/app/{scope_autoset,func_gen,sw_edge}.v` → black box。
+3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
+   `USR-8052/8168` 约束错误。
+
+因此本机重建用 `FPGA_TD/make_scope_local9.tcl`（41 个源文件 + `-speed -5` +
+`eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
+与仓库现行固件一致），生成 `scope_local7.al`：
+LUT 5534/19600（28.23%）、slack +12.9ns、比特流
+`scope_local9_Runs/best_result/scope_local9.bit`（2026-11-01 已烧入 SRAM）。
+
+> **2026-11-01 关键缺陷：约束文件缺 5 个拨码开关 + 全部 AD/DA 引脚**
+> `eg4/SparkRoad.adc` 原本只绑了 `sw[0..3]`(T4/R5/T5/T6)，**`sw[4..8]` 完全没约束**
+> （TD 自动乱放/悬空）。后果：SW7(P8) 读到高电平 → U/D 变成"移基线"而不是调纵向档；
+> SW8(N8) 根本没接 → 拨 SW8 模式不切换，"内部函数发生器"以为选了其实没选。
+> 已补：`sw[4]=M6, sw[5]=P6, sw[6]=N6, sw[7]=P8, sw[8]=N8`（来自 doc/SparkRoad-V_pinmap.md）。
+>
+> **仍未约束**：24 脚并口 AD/DA 的 `ad0..ad9 / adclk / da0..da9 / daclk`（22 个 IO）
+> 在 `.adc` 里一条都没有 → AD/DA 模式目前接不到外部模块，需要按实际接线补齐。
+
+底部第 58 字符行新增缩放档标签 `X:+0.5 Y:-1.0 T=46667U`（`FPGA/src/vga/abs/zoom_label.v`）：
+
+| 字段 | 含义 | 范围 |
+|---|---|---|
+| `X` | 横轴缩放档（带小数）：每按一次放大 +0.5、缩小 -0.5，0.0=不缩放 | ±30.0 |
+| `Y` | 纵轴缩放档 = (4-vs)x0.5，取自 SW2 选中通道 | +1.0 … -1.5 |
+| `T` | 整屏时间（640 像素覆盖的真实时间），按模式换算采样节拍 | 1.0us … 1.9s |
+
+> `X` 是**按键计数**（`scope_app.hzoom10`，单位 0.1 档），不跟随 S/时基反推；
+> 切换 SW8 模式时计数清零、`hscale`/`tb_idx`/`tb_div` 一并复位到 1:1
+> （`tb_div=0` 最快档），保证一换模式就能看到完整波形——这是"切到自发生模式没波形"
+> 的修复：旧版本会把上一模式的极端缩放/时基带过去，50Hz 被压成一条直线。
+
+> `X` 以"1 采样点/像素 + 最快时基"为 0 点，同时受 `hscale`(1..102, 64=1:1) 和
+> `tb_idx`(0..15) 影响；`Y` 取当前选中通道(SW2)的 `vs`(右移位数 2..7，4=1:1)。
+> 字符 `+` 是 2026-11-01 新加到 `hal/font_rom.v`（码 41）和 `tools/gen_font.py`。
+
+> 注意 `sparkroad_scope_pll` 里 `DEMO_SINE(1)`：上电自动下发 T0/A1/M1/L512，
+> 即**时基被强制到最快档（tb_div=0）**。AD/DA 模式下 ADC 每 8 clk 一个样本，
+> 于是最宽只有约 340us/屏 —— 这就是"2000Hz 连半个周期都装不下、低频正弦看着像直流"
+> 的根因。2026-11-01 已把左右键改成可跨时基档，整屏时间可在 3.3us ~ 1.9s 间连续调。
 
 ## 8. 目录与关键文件
 

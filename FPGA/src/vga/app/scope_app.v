@@ -94,6 +94,8 @@ module scope_app #(
     output reg  [3:0]  pos1,
     output wire        roll,          // 滚动状态别名，恒等于 scroll_en
     output reg  [6:0]  hscale,        // 横轴缩放系数 S(1..102): pxz=(px*S)>>6，64=1:1
+    output reg  signed [9:0] hzoom10, // 横轴缩放档 x10（单位 0.1 档）：每按一次放大/缩小 +5/-5
+    input  wire        mode_chg,      // SW8 模式切换脉冲：横轴缩放复位到 1:1
     output reg  signed [12:0] yoff,   // 基线偏移(像素)，SW7 打开时由 U/D 调整
     output reg         menu_page,     // 0=示波器设置 1=信号源设置
     // ---- 函数发生器参数：CH0 / CH1 两套完全独立，各自驱动一个 func_gen 实例 ----
@@ -143,6 +145,7 @@ module scope_app #(
     localparam [6:0] HSC_MIN = 7'd1;     // 最大放大（约 64 倍）
     localparam [6:0] HSC_MAX = 7'd102;   // 最大缩小（约等于适应全屏，受 1024 点缓冲限制）
     localparam [6:0] HSC_1X  = 7'd64;    // 1:1
+    localparam [6:0] HSC_OUT_JOIN = 7'd51;  // 跨时基档时 S 的回落值(≈102/2)，保持整屏时间连续
 
     // 放大：S <- S - S/8；S 很小时 S/8=0，步长保底 1，保证按键始终有反应
     function [6:0] hsc_in;
@@ -259,6 +262,7 @@ module scope_app #(
             pos0       <= 4'd5;
             pos1       <= 4'd5;
             hscale     <= HSC_1X;
+            hzoom10    <= 10'sd0;
             yoff       <= 13'sd0;
             menu_page  <= 1'b0;
             // 两套信号源参数的复位值：
@@ -312,13 +316,37 @@ module scope_app #(
                         end
                     end
                 end
-                // 左右按键 = 横轴连续缩放（只改显示，不重新采集）
-                //   左 = 放大（S 减小），右 = 缩小（S 增大），每次乘性步进约 ±1/8。
-                //   长按 500ms 后每 30ms 再来一步，所以按住不放是丝滑变化，而不是台阶。
-                //   SW6(sw_hzfree) 已无意义：S 的 1..102 本身就覆盖了 1/64x..1.6x，
-                //   端口保留只为不动物理引脚定义。
-                if (ev_ls | ev_ll | ev_lr) hscale <= hsc_in(hscale);
-                if (ev_rs | ev_rl | ev_rr) hscale <= hsc_out(hscale);
+                // 左右按键 = 横轴缩放，S 到边界后自动跨时基档（整屏时间连续可调）
+                //   左 = 放大（S 减小 → 整屏时间变短），右 = 缩小（S 增大 → 整屏时间变长）
+                //   每次乘性步进约 ±1/8（长按 500ms 后每 30ms 一步，丝滑变化）。
+                //   跨档规则（保证整屏时间单调、连续）：
+                //     放大：S 已到 HSC_MIN(1) 时，时基往"快"走一档(tb_idx+1)，
+                //           S 保持 1 → 整屏时间正好减半；
+                //     缩小：S 已到 HSC_MAX(102) 时，时基往"慢"走一档(tb_idx-1)，
+                //           S 回落到 51 → 整屏时间 ≈ 2x(51/102)=1.0，正好衔接。
+                //   效果：左右键一次性覆盖 约 8us ~ 2.1s 的整屏时间，
+                //         最慢档(S=93..102, tb_idx=0)整屏 ≈ 2.1s ≫ 500ms。
+                //   同时维护横轴缩放档计数 hzoom10：每按一次放大 +5、缩小 -5
+                //   （显示成 X:+0.5 / X:-0.5 …），夹紧在 ±300(=±30.0 档)。
+                if (ev_ls | ev_ll | ev_lr) begin
+                    if (hscale > HSC_MIN) hscale <= hsc_in(hscale);
+                    else if (tb_idx != 4'd15) begin
+                        tb_idx <= tb_next;
+                        tb_div <= tb_val(tb_next);
+                        arm    <= 1'b1;
+                    end
+                    if (hzoom10 < 10'sd300) hzoom10 <= hzoom10 + 10'sd5;
+                end
+                if (ev_rs | ev_rl | ev_rr) begin
+                    if (hscale < HSC_MAX) hscale <= hsc_out(hscale);
+                    else if (tb_idx != 4'd0) begin
+                        tb_idx <= tb_prev;
+                        tb_div <= tb_val(tb_prev);
+                        hscale <= HSC_OUT_JOIN;
+                        arm    <= 1'b1;
+                    end
+                    if (hzoom10 > -10'sd300) hzoom10 <= hzoom10 - 10'sd5;
+                end
             end
             else begin
                 // ---- 菜单模式 ----
@@ -353,12 +381,16 @@ module scope_app #(
                             end
                             // 菜单 HSC：与 L/R 完全相同的乘性规则
                             4'd6: begin
-                                if (ev_us) hscale <= hsc_in(hscale);        // U=放大(S 减小)
-                                if (ev_ds) hscale <= hsc_out(hscale);       // D=缩小(S 增大)
+                                if (ev_us) begin hscale <= hsc_in(hscale);
+                                    if (hzoom10 < 10'sd300) hzoom10 <= hzoom10 + 10'sd5; end
+                                if (ev_ds) begin hscale <= hsc_out(hscale);
+                                    if (hzoom10 > -10'sd300) hzoom10 <= hzoom10 - 10'sd5; end
                             end
                             4'd7: begin
-                                if (ev_us) begin tb_idx <= tb_next; tb_div <= tb_val(tb_next); end
-                                if (ev_ds) begin tb_idx <= tb_prev; tb_div <= tb_val(tb_prev); end
+                                if (ev_us) begin tb_idx <= tb_next; tb_div <= tb_val(tb_next);
+                                    if (hzoom10 < 10'sd300) hzoom10 <= hzoom10 + 10'sd5; end
+                                if (ev_ds) begin tb_idx <= tb_prev; tb_div <= tb_val(tb_prev);
+                                    if (hzoom10 > -10'sd300) hzoom10 <= hzoom10 - 10'sd5; end
                                 arm <= 1'b1;
                             end
                             // 菜单 ROL：与 SW3、串口 S 共用同一个 scroll_en
@@ -415,6 +447,18 @@ module scope_app #(
                 // 避免出现"菜单里看不到光标"的错觉。
                 if (menu_sel > (menu_page ? 4'd7 : 4'd8))
                     menu_sel <= menu_page ? 4'd7 : 4'd8;
+            end
+
+            //================= SW8 模式切换：横轴缩放复位 =================
+            //   切到"自发生/AD-DA"后把时基与缩放打回 1:1（tb_div=0 最快档），
+            //   保证一换模式就能看到完整波形，不用先手动找时基；
+            //   同时清零 X 档计数，屏幕上 X:0.0。
+            if (mode_chg) begin
+                hscale  <= HSC_1X;
+                tb_idx  <= 4'd15;
+                tb_div  <= 16'd0;
+                hzoom10 <= 10'sd0;
+                arm     <= 1'b1;
             end
 
             //================= 拨动开关（电平语义，优先级最高）=================
