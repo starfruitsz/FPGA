@@ -92,7 +92,14 @@ parameter signed B01=21'd90;
 parameter signed B02=21'd2700; 
 parameter signed B03=21'd27000; 
 parameter signed b0=16'd5000; 
-parameter signed n = 2'd1; 
+parameter signed n = 2'd1;
+// ---- 控制律参数（2026-11-01 改为经典 ADRC 形式）----
+//   u0 = KP*(Y_REF - z1) - KD*z2 ;  u = (u0 - z3)/B0 ;  DAC = clamp(u+512)
+//   ESO 带宽仍只由 B01/B02/B03 决定，保持不变。
+parameter integer KP    = 20;     // 比例增益
+parameter integer KD    = 0;      // 微分增益（0 = 纯 P）
+parameter integer B0    = 500;    // 被控对象增益（输出除以 b0）
+parameter integer Y_REF = -512;   // 参考值（"中点制" ADC 码：0V = -512，中点1.65V = 0） 
  
 //------------------------------------------------------------------------------
 // 状态寄存器 z1k1/z2k1/z3k1: 当前状态 z(k), 只在 pv[2]=1 的那一拍更新
@@ -314,7 +321,9 @@ assign kshe_p = she * k;
 reg signed [`WIDTH + 13 + 11 -1: 0] kshe_r; 
 reg signed [4 : 0] sgn_r; 
 reg signed [`WIDTH + 12 -1: 0] err2_s; 
-reg signed [`WIDTH - 1: 0]    z3_s; 
+reg signed [`WIDTH - 1: 0]    z3_s;
+reg signed [`WIDTH - 1: 0]    z1_s;
+reg signed [`WIDTH - 1: 0]    z2_s; 
 
 always@(posedge ad_clk or negedge sys_rst_n) 
     if(sys_rst_n==1'b0) 
@@ -322,14 +331,18 @@ always@(posedge ad_clk or negedge sys_rst_n)
             kshe_r <= 'd0; 
             sgn_r  <= 'd0; 
             err2_s <= 'd0; 
-            z3_s   <= 'd0; 
+            z3_s   <= 'd0;
+            z1_s   <= 'd0;
+            z2_s   <= 'd0; 
         end 
     else if(pv[3]==1'b1) 
         begin 
             kshe_r <= kshe_p; 
             sgn_r  <= sgn; 
             err2_s <= err2_r; 
-            z3_s   <= z3s_r; 
+            z3_s   <= z3s_r;
+            z1_s   <= z1q;
+            z2_s   <= z2q; 
         end 
 
 //------------------------------------------------------------------------------
@@ -339,14 +352,27 @@ always@(posedge ad_clk or negedge sys_rst_n)
 //   就是 3FF, 与原实现"复位时组合输出的值"完全一致。
 //   (端口仍声明为 wire, 内部寄存器 out_da_r 打一拍后 assign 出去, 端口表不变)
 //------------------------------------------------------------------------------
+// [2026-11-01] 经典 ADRC 控制律：
+//   e  = Y_REF - z1
+//   u0 = KP*e - KD*z2
+//   u  = (u0 - z3) / B0      （B0 用 Q16 倒数相乘实现，RECIP ≈ 65536/B0）
+localparam integer RECIP = (65536 + (B0/2)) / ((B0 > 0) ? B0 : 1);
+
+wire signed [21:0] e_ref = $signed(Y_REF) - $signed({{2{z1_s[`WIDTH-1]}}, z1_s});
+wire signed [31:0] u0_v  = KP * e_ref - KD * $signed({{12{z2_s[`WIDTH-1]}}, z2_s});
+wire signed [31:0] u0_z  = u0_v - $signed({{12{z3_s[`WIDTH-1]}}, z3_s});
+wire signed [31:0] u_div = (u0_z * RECIP) >>> 16;
+wire signed [10:0] u_cl  = (u_div > 32'sd511)  ? 11'sd511  :
+                           (u_div < -32'sd512) ? -11'sd512 : u_div[10:0];
+
 wire signed [`WIDTH + 22 -1: 0] v_1; 
 assign v_1 = kshe_r + sgn_r + err2_s; 
 
 wire signed [`WIDTH + 21 -1: 0] viout; 
 assign viout = v_1 - z3_s; //ks+sgn+cz2-f 
 
-wire signed [40 -1: 0] b; 
-assign b = viout >>> 15; 
+wire signed [40 -1: 0] b;
+assign b = {{29{u_cl[10]}}, u_cl};   // 已经是 DAC 码偏移（-512..511），不再 >>>15 
 
 reg signed [9:0] out_da_r; 
 

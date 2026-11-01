@@ -255,11 +255,18 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local19.tcl`（42 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local20.tcl`（42 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local19_Runs/best_result/scope_local19.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local20_Runs/best_result/scope_local20.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 ADRC 控制律改为经典形式**（`eso.v` 级 6）：
+>   `u0 = KP*(Y_REF - z1) - KD*z2`，`u = (u0 - z3)/B0`，`DAC = clamp(u+512)`
+>   参数：**KP=20、KD=0、B0=500、Y_REF=-512（0V 对应中点制 -512）**；
+>   观测器带宽 B01/B02/B03 保持 90/2700/27000 不变；`b0` 改为 500。
+>   旧实现是 `u = (k*c*z1 + (k+c)*z2 + sgn - z3) >>> 15`（c/k 那条老路子），
+>   现已不再参与输出（`k`/`c` 寄存器仍在但输出不用，TD 会优化掉）。
 
 > **2026-11-01 SW15 滤波器换成"一阶稳态卡尔曼"**：原来的 50Hz 状态变量带通
 > 谐振时状态摆幅是输入的 Q(5) 倍，20bit 定点会溢出 → 用户实测"一开滤波波形就变形"。
