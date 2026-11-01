@@ -27,10 +27,16 @@ module dc_removal (
 
     reg signed [23:0] mean;       // 直流均值 Q8
     reg               primed;
+    reg        [19:0] lock_cnt;   // 校零计数：满 2^20 采样后冻结
+
+    // [2026-11-01 修复] 原来的 alpha=1/1024 时间常数太短：
+    //   最快时基(3.15MHz)下 1024 采样只有 0.3ms，远小于 48Hz 的 20ms 周期，
+    //   滤波器会把信号本身当直流减掉 —— 表现为"ADC 波形几乎没了"。
+    //   现改为：alpha=1/65536 且只在前 2^20 个采样跟踪，之后冻结成固定零点。
 
     wire signed [23:0] xq  = {14'b0, din} <<< 8;     // 输入 Q8
     wire signed [23:0] err = xq - mean;
-    wire signed [23:0] inc = err >>> 10;             // alpha = 1/1024
+    wire signed [23:0] inc = err >>> 16;             // alpha = 1/65536
 
     // 去除直流后的偏移量（Q8），限幅到 ±512 码
     wire signed [23:0] yq = err >>> 8;               // Q8 -> 码
@@ -41,16 +47,19 @@ module dc_removal (
 
     always @(posedge clk) begin
         if (rst) begin
-            mean   <= 24'sd0;
-            primed <= 1'b0;
+            mean     <= 24'sd0;
+            primed   <= 1'b0;
+            lock_cnt <= 20'd0;
         end
         else if (en) begin
             if (!primed) begin
+                lock_cnt <= 20'd0;
                 mean   <= xq;          // 第一个采样直接当初始直流
                 primed <= 1'b1;
             end
-            else if (dc_on) begin
-                mean <= mean + inc;    // 缓慢跟踪直流
+            else if (dc_on && (lock_cnt != 20'hFFFFF)) begin
+                mean     <= mean + inc;    // 缓慢跟踪直流（只在前 2^20 采样内）
+                lock_cnt <= lock_cnt + 20'd1;
             end
         end
     end
