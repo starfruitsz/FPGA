@@ -316,14 +316,14 @@ module tb_sparkroad_top;
             end
         end
         // DAC 码 = clamp(u_sgn + 512)，u_sgn 由 SW14 决定符号
-        if (dut.adrc_da !== (({1'b0,dut.eso_u} + 11'd512) > 11'd1023 ? 10'd1023 : ({1'b0,dut.eso_u} + 10'd512))) begin
+        if (dut.adrc_da !== (({1'b0,dut.eso_u_eff} + 11'd512) > 11'd1023 ? 10'd1023 : ({1'b0,dut.eso_u_eff} + 10'd512))) begin
             errors=errors+1;
-            $display("  FAIL da_data 不等于 clamp(u+512) (u=%0d da=%0d)", $signed(dut.eso_u), dut.adrc_da); end
+            $display("  FAIL da_data 不等于 clamp(u+512) (u=%0d da=%0d)", $signed(dut.eso_u_eff), dut.adrc_da); end
 
         // 带通滤波后直流输入 -> y 会收敛到 0 附近（不再要求 u 变化）
         repeat (4000) @(posedge clk);
         $display("  ADRC: u=%0d y=%0d ad_bpf=%0d da_data=%0d",
-                 $signed(dut.eso_u), $signed(dut.ad_y), dut.ad_bpf, da_bus);
+                 $signed(dut.eso_u_eff), $signed(dut.ad_y), dut.ad_bpf, da_bus);
 
         // DA 通道: da_clk 上升沿锁存 adrc_da, 引脚输出锁存后的码值
         @(negedge daclk);
