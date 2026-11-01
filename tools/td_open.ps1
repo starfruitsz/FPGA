@@ -2,7 +2,7 @@
 #   用法:  pwsh -File tools\td_open.ps1                      # 默认打开 scope_local4.al
 #          pwsh -File tools\td_open.ps1 -Project scope_eg4_60.al
 param(
-    [string]$Project = "scope_local16.al",
+    [string]$Project = "scope_local17.al",
     [string]$TdHome  = "C:\Anlogic\TD_5.6.5_SP5_170.155"
 )
 $ErrorActionPreference = "Stop"

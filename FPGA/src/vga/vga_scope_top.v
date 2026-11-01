@@ -658,10 +658,25 @@ module vga_scope_top #(
     // 底部 Y 档 x10：每步 0.5 档 -> vstep x 5（范围 ±150 = ±15.0）
     wire signed [9:0] y10v = (sel_ch_o ? vstep1 : vstep0) * 6'sd5;
 
+    // 当前通道的增益表索引（V 字段查表用）：手动= vstep+30；自动档折算成等价的表索引
+    wire [5:0] vstep_sel = (sel_ch_o ? vstep1 : vstep0) + 6'sd30;
+    reg  [5:0] auto_gsel;
+    always @(*) begin
+        case (vs_auto)
+            3'd2: auto_gsel = 6'd42;   // x4
+            3'd3: auto_gsel = 6'd36;   // x2
+            3'd4: auto_gsel = 6'd30;   // x1
+            3'd5: auto_gsel = 6'd24;   // x0.5
+            3'd6: auto_gsel = 6'd18;   // x0.25
+            default: auto_gsel = 6'd12; // x0.125
+        endcase
+    end
+    wire [5:0] gsel = sw_auto ? auto_gsel : vstep_sel;
+
     zoom_label #(.X0(8), .Y0(464), .COL(COL_TEXT)) u_zoom (
         .px(px_d), .py(py_d), .de(de_d),
         .hscale(hscale), .tb_idx(tb_idx), .adc_mode(adc_mode),
-        .x10(hzoom10), .y10(y10v),
+        .x10(hzoom10), .y10(y10v), .gsel(gsel),
         .hit(zl_hit), .color(zl_col)
     );
 
