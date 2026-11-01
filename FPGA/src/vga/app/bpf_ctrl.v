@@ -38,6 +38,14 @@ module bpf_ctrl (
 
     wire signed [31:0] x_in = ($signed({22'b0, din}) - 32'sd512) <<< 16;
 
+    // [2026-11-01 修复] 乘法必须用 64bit 中间量：
+    //   原写法 (high * f) >>> 24 在 32bit 上下文里先溢出再移位，
+    //   实测 t3=14（应为 270），导致 band 累不起来、增益掉到 0.05。
+    wire signed [63:0] f64  = {{32{F_Q24[23]}}, F_Q24};
+    wire signed [63:0] m1_64 = band * f64;
+    wire signed [63:0] m3_64 = high * f64;
+    wire signed [63:0] qb_64 = band * {{48'b0, Q_Q16}};
+
     wire signed [31:0] band_n = band + t3;
     // 归一化：bc = band * (1/Q)，使 47Hz 处增益 = 1（否则峰值增益 = Q = 3.36）
     wire signed [63:0] bc     = band_n * $signed({48'b0, Q_Q16});   // Q16*Q16 -> Q32
@@ -57,12 +65,12 @@ module bpf_ctrl (
             case (st)
                 3'd0: if (en) begin x_q16 <= x_in; st <= 3'd1; end
                 3'd1: begin                                  // t1 = f*band
-                    t1 <= (band * $signed({{8{F_Q24[23]}}, F_Q24})) >>> 24;
+                    t1 <= m1_64 >>> 24;
                     st <= 3'd2;
                 end
                 3'd2: begin                                  // low += t1 ; qb = q*band
                     low_n <= low + t1;
-                    qb    <= (band * $signed({16'b0, Q_Q16})) >>> 16;
+                    qb    <= qb_64 >>> 16;
                     st    <= 3'd3;
                 end
                 3'd3: begin                                  // high = x - low - qb
@@ -70,7 +78,7 @@ module bpf_ctrl (
                     st   <= 3'd4;
                 end
                 3'd4: begin                                  // t3 = f*high
-                    t3 <= (high * $signed({{8{F_Q24[23]}}, F_Q24})) >>> 24;
+                    t3 <= m3_64 >>> 24;
                     st <= 3'd5;
                 end
                 3'd5: begin                                  // band += t3 ; 输出
