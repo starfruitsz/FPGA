@@ -255,11 +255,18 @@ FPGA_TD/full_flow60.tcl：
 3. `eg4/SparkRoad.adc` 还残留 7 条 AD7606 引脚约束（顶层已移除 AD7606）→
    `USR-8052/8168` 约束错误。
 
-因此本机重建用 `FPGA_TD/make_scope_local17.tcl`（42 个源文件 + `-speed -5` +
+因此本机重建用 `FPGA_TD/make_scope_local19.tcl`（42 个源文件 + `-speed -5` +
 `eg4/SparkRoad.adc`），**顶层用 `sparkroad_scope_pll`**（PLL 25.2MHz / 60Hz，
 与仓库现行固件一致），生成 `scope_local7.al`：
 LUT 5534/19600（28.23%）、slack +12.9ns、比特流
-`scope_local17_Runs/best_result/scope_local17.bit`（2026-11-01 已烧入 SRAM 并固化）。
+`scope_local19_Runs/best_result/scope_local19.bit`（2026-11-01 已烧入 SRAM 并固化）。
+
+> **2026-11-01 SW15 滤波器换成"一阶稳态卡尔曼"**：原来的 50Hz 状态变量带通
+> 谐振时状态摆幅是输入的 Q(5) 倍，20bit 定点会溢出 → 用户实测"一开滤波波形就变形"。
+> 现改为常增益卡尔曼（等价一阶 IIR 低通，恒稳定无过冲）：
+> `x += K*(z-x)`，K 按 `{adc_mode, tb_idx}` 查表使**等效截止恒为 150Hz**
+> （50Hz 处 |H|=0.95），状态 24bit Q8，K 过大/过小时自动旁路。
+> 文件仍是 `FPGA/src/vga/app/bpf50.v`（内容已换）。
 
 > **2026-11-01 底部状态行新增 `V=` 电压跨度**：整屏 448 像素覆盖的电压范围，
 > ADC 0..1023 映射 0..3.3V -> `V = 448*4096/(gain*1024)*3.3`，默认增益 1792 时正好 3.30V。

@@ -485,61 +485,16 @@ module vga_scope_top #(
     endgenerate
 
     //------------------------------------------------------------------
-    // SW15：50Hz 带通显示滤波（中心 50Hz / Q=5）
-    //   每采一个点（we 有效）推进一次滤波器，输出直接写进显示 RAM，
-    //   所以屏幕上看到的就是滤过的波形，采集/触发逻辑一点不受影响。
-    //   系数 f=2*sin(pi*50/fs) 由 {adc_mode, tb_idx} 查表给出（fs 随采样率变）。
+    // SW15：显示平滑滤波 —— 一阶稳态卡尔曼（按采样率自适应增益，等效截止 150Hz）
+    //   每采一个点（we 有效）推进一次，输出直接写进显示 RAM，采集/触发完全不受影响。
+    //   增益表在 bpf50.v 里按 {adc_mode, tb_idx} 给，50Hz 处基本不衰减。
     //------------------------------------------------------------------
-    function [11:0] bpf_f_rom;
-        input wire m;          // 1=AD/DA 模式(样本 8clk 起) 0=自发生(2100clk 起)
-        input wire [3:0] i;
-        begin
-            case ({m, i})
-                // AD/DA 模式：fs = 25.2MHz / max(tb_div+1, 8)
-                5'd0 : bpf_f_rom = 12'd2512;
-                5'd1 : bpf_f_rom = 12'd1272;
-                5'd2 : bpf_f_rom = 12'd638;
-                5'd3 : bpf_f_rom = 12'd319;
-                5'd4 : bpf_f_rom = 12'd160;
-                5'd5 : bpf_f_rom = 12'd80;
-                5'd6 : bpf_f_rom = 12'd40;
-                5'd7 : bpf_f_rom = 12'd20;
-                5'd8 : bpf_f_rom = 12'd10;
-                5'd9 : bpf_f_rom = 12'd5;
-                5'd10: bpf_f_rom = 12'd2;
-                5'd11: bpf_f_rom = 12'd1;
-                5'd12: bpf_f_rom = 12'd0;
-                5'd13: bpf_f_rom = 12'd0;
-                5'd14: bpf_f_rom = 12'd0;
-                5'd15: bpf_f_rom = 12'd0;
-                // 自发生模式：func_gen 12kHz 起，fs = 25.2MHz / max(tb_div+1, 2100)
-                5'd16: bpf_f_rom = 12'd2512;
-                5'd17: bpf_f_rom = 12'd1272;
-                5'd18: bpf_f_rom = 12'd638;
-                5'd19: bpf_f_rom = 12'd319;
-                5'd20: bpf_f_rom = 12'd160;
-                5'd21: bpf_f_rom = 12'd107;
-                5'd22: bpf_f_rom = 12'd107;
-                5'd23: bpf_f_rom = 12'd107;
-                5'd24: bpf_f_rom = 12'd107;
-                5'd25: bpf_f_rom = 12'd107;
-                5'd26: bpf_f_rom = 12'd107;
-                5'd27: bpf_f_rom = 12'd107;
-                5'd28: bpf_f_rom = 12'd107;
-                5'd29: bpf_f_rom = 12'd107;
-                5'd30: bpf_f_rom = 12'd107;
-                default: bpf_f_rom = 12'd107;
-            endcase
-        end
-    endfunction
-
-    wire [11:0] bpf_f = bpf_f_rom(adc_mode, tb_idx);
-    wire [9:0]  ch0_f, ch1_f;
+    wire [9:0] ch0_f, ch1_f;
 
     bpf50 u_bpf0 (.clk(clk), .rst(rst), .en(we0), .filt_on(sw_filt),
-                  .fcoef(bpf_f), .din(ch0_in), .dout(ch0_f));
+                  .adc_mode(adc_mode), .tb_idx(tb_idx), .din(ch0_in), .dout(ch0_f));
     bpf50 u_bpf1 (.clk(clk), .rst(rst), .en(we1), .filt_on(sw_filt),
-                  .fcoef(bpf_f), .din(ch1_in), .dout(ch1_f));
+                  .adc_mode(adc_mode), .tb_idx(tb_idx), .din(ch1_in), .dout(ch1_f));
 
     vram_sdp #(.DW(10), .AW(DEPTH_LOG2+1)) u_ram0 (
         .clk(clk), .we(we0), .waddr({buf_wr0, wa0}), .wdata(ch0_f),
