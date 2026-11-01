@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 #  run_all.ps1 -- 一键编译+运行本工程的 Icarus Verilog 仿真
 #  用法:  powershell -ExecutionPolicy Bypass -File .\sim\run_all.ps1
 #  依赖:  Icarus Verilog (默认 C:\iverilog)，可用 -IverilogPath 指定
@@ -59,19 +59,19 @@ $cases = @(
                 'vga\abs\grid_layer.v', 'vga\abs\trace_layer.v', 'vga\abs\text_layer.v',
                 'vga\abs\compositor.v', 'vga\abs\menu_layer.v',
                 'vga\app\scope_app.v', 'vga\app\scope_capture.v', 'vga\app\scope_meas.v',
-                'vga\app\scope_ui.v',  'vga\app\scope_autoset.v') },
+                'vga\app\scope_ui.v',  'vga\app\scope_autoset.v', 'vga\app\bpf50.v', 'vga\app\dc_removal.v', 'vga\abs\zoom_label.v') },
     @{ n = 'vga_scope_top_pix2'; tb = 'tb_vga_scope_top.v'; flags = @('-DPIX2');
        srcs = @('vga\vga_scope_top.v', 'vga\hal\vga_timing.v', 'vga\hal\vram_sdp.v', 'vga\hal\font_rom.v',
                 'vga\abs\grid_layer.v', 'vga\abs\trace_layer.v', 'vga\abs\text_layer.v',
                 'vga\abs\compositor.v', 'vga\abs\menu_layer.v',
                 'vga\app\scope_app.v', 'vga\app\scope_capture.v', 'vga\app\scope_meas.v',
-                'vga\app\scope_ui.v',  'vga\app\scope_autoset.v') },
+                'vga\app\scope_ui.v',  'vga\app\scope_autoset.v', 'vga\app\bpf50.v', 'vga\app\dc_removal.v', 'vga\abs\zoom_label.v') },
     @{ n = 'scope_trigger';  tb = 'tb_scope_trigger.v';
        srcs = @('vga\vga_scope_top.v', 'vga\hal\vga_timing.v', 'vga\hal\vram_sdp.v', 'vga\hal\font_rom.v',
                 'vga\abs\grid_layer.v', 'vga\abs\trace_layer.v', 'vga\abs\text_layer.v',
                 'vga\abs\compositor.v', 'vga\abs\menu_layer.v',
                 'vga\app\scope_app.v', 'vga\app\scope_capture.v', 'vga\app\scope_meas.v',
-                'vga\app\scope_ui.v',  'vga\app\scope_autoset.v') },
+                'vga\app\scope_ui.v',  'vga\app\scope_autoset.v', 'vga\app\bpf50.v', 'vga\app\dc_removal.v', 'vga\abs\zoom_label.v') },
     # 并口 AD/DA 模块（24 脚）驱动: ADCLK/DACLK 8 分频、AD 反相沿采样 + 两拍同步、DA 上升沿锁存
     @{ n = 'ad_da_par';      tb = 'tb_ad_da_par.v';      srcs = @('ad_da_par.v') },
     # ESO(ADRC) 观测器: sys_clk 域 + 每采样一次使能（en=0 时状态保持）
@@ -87,7 +87,7 @@ $cases = @(
                 'vga\app\scope_ui.v',  'vga\app\scope_cmd.v',  'vga\app\sine_50hz.v',
                 'vga\app\func_gen.v',  'vga\app\sw_edge.v',   'vga\app\scope_autoset.v',
                 'adc\adc_ad7606_top.v', 'adc\hal\adc_ad7606_spi.v', 'adc\abs\adc_cfg.v',
-                'adc\abs\adc_norm.v',  'adc\app\adc_cmd.v') }
+                'adc\abs\adc_norm.v',  'adc\app\adc_cmd.v', 'vga\app\bpf_ctrl.v', 'vga\app\bpf50.v', 'vga\app\dc_removal.v', 'vga\abs\zoom_label.v') }
 )
 
 $pass = 0; $fail = 0; $skip = 0
@@ -121,3 +121,4 @@ foreach ($c in $cases) {
 
 Write-Host ("TOTAL: PASS={0}  FAIL={1}  SKIP={2}" -f $pass, $fail, $skip) -ForegroundColor $(if ($fail -eq 0) { 'Green' } else { 'Red' })
 if ($fail -ne 0) { exit 1 } else { exit 0 }
+

@@ -227,7 +227,7 @@ module tb_vga_scope_top;
         if (dut.u_auto.mid_out0 !== 10'd400)  begin errors=errors+1; $display("  FAIL CH0 中点不是 400"); end
         if (dut.u_auto.mid_out1 !== 10'd800)  begin errors=errors+1; $display("  FAIL CH1 中点不是 800"); end
         if (dut.u_auto.peak_out !== 10'd412)  begin errors=errors+1; $display("  FAIL peak_out 不是 max(peak0,peak1)=412"); end
-        if (dut.vsc0_eff !== dut.vsc1_eff)    begin errors=errors+1; $display("  FAIL 两通道档位不一致"); end
+        if (dut.vg0 !== dut.vg1)    begin errors=errors+1; $display("  FAIL 两通道档位不一致"); end
         // 通道显不显示只由 ch0_en/ch1_en 决定，自动量程不许动它们
         if (dut.ch0_en !== 1'b1 || dut.ch1_en !== 1'b1)
                           begin errors=errors+1; $display("  FAIL 自动量程改变了通道使能"); end
@@ -353,11 +353,11 @@ module tb_vga_scope_top;
         wait (frame_captured);
         cap_en <= 1'b0;
 
-        $display("  vsc0_eff=%0d vsc1_eff=%0d (expect 4/4，共用一个档位)",
-                 dut.vsc0_eff, dut.vsc1_eff);
+        $display("  vg0=%0d vg1=%0d (expect 1792/1792，默认增益一致)",
+                 dut.vg0, dut.vg1);
         $display("  CH0 波形行范围 : %0d..%0d (expect 48..398)", ch0_y_min, ch0_y_max);
         $display("  CH1 波形行范围 : %0d..%0d (expect 180..267)", ch1_y_min, ch1_y_max);
-        if (dut.vsc0_eff !== dut.vsc1_eff) begin
+        if (dut.vg0 !== dut.vg1) begin
             errors=errors+1; $display("  FAIL 两通道没有共用同一个 vs"); end
         if (ch0_y_min != 48 || ch0_y_max != 398) begin
             errors=errors+1; $display("  FAIL CH0 幅度映射不对（共用 vs 失效？）"); end

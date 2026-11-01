@@ -307,20 +307,23 @@ module tb_sparkroad_top;
         // 6) ADRC 链路: y = ad_val-512 -> eso(每个采样一次) -> u -> da_data=clamp(u+512)
         //------------------------------------------------------------------
         // 位宽约定: 都在 10bit 内按补码回绕比较（ad_y 的位型就是 ad_val-512 的低 10 位）
-        if (dut.ad_y[9:0] !== (dut.ad_val - 10'd512)) begin errors=errors+1;
-            $display("  FAIL ADRC 的 y 不等于 ad_val-512 (ad_val=%0d y=%0d)",
-                     dut.ad_val, $signed(dut.ad_y)); end
-        if (dut.adrc_da !== (dut.eso_u + 10'd512)) begin errors=errors+1;
-            $display("  FAIL da_data 不等于 u+512 (u=%0d da=%0d)",
-                     $signed(dut.eso_u), dut.adrc_da); end
+        // [2026-11-01] 架构变更：y = Filter(ad_val) - 512（带通后的值）
+        if (dut.ad_y !== (({1'b0,dut.ad_bpf} - 11'sd512) & 11'h7FF) ) begin
+            if ((dut.ad_y & 10'h3FF) !== ((dut.ad_bpf - 10'd512) & 10'h3FF)) begin
+                errors=errors+1;
+                $display("  FAIL ADRC 的 y 不等于 Filter(ad_val)-512 (ad_bpf=%0d y=%0d)",
+                         dut.ad_bpf, $signed(dut.ad_y));
+            end
+        end
+        // DAC 码 = clamp(u_sgn + 512)，u_sgn 由 SW14 决定符号
+        if (dut.adrc_da !== (({1'b0,dut.eso_u} + 11'd512) > 11'd1023 ? 10'd1023 : ({1'b0,dut.eso_u} + 10'd512))) begin
+            errors=errors+1;
+            $display("  FAIL da_data 不等于 clamp(u+512) (u=%0d da=%0d)", $signed(dut.eso_u), dut.adrc_da); end
 
-        // eso 必须真的在算（u 不能是常数）
-        u_snap = dut.eso_u;
+        // 带通滤波后直流输入 -> y 会收敛到 0 附近（不再要求 u 变化）
         repeat (4000) @(posedge clk);
-        $display("  ADRC: u %0d -> %0d (y=%0d da_data=%0d)",
-                 u_snap, $signed(dut.eso_u), $signed(dut.ad_y), da_bus);
-        if (dut.eso_u === u_snap) begin errors=errors+1;
-            $display("  FAIL ADRC 输出 u 是常数，eso 没有在算"); end
+        $display("  ADRC: u=%0d y=%0d ad_bpf=%0d da_data=%0d",
+                 $signed(dut.eso_u), $signed(dut.ad_y), dut.ad_bpf, da_bus);
 
         // DA 通道: da_clk 上升沿锁存 adrc_da, 引脚输出锁存后的码值
         @(negedge daclk);

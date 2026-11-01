@@ -4,10 +4,10 @@
 // 功能: 算法级 40~54Hz 带通滤波 —— 只用在 **ADRC 的输入 y** 上
 //       显示通路仍显示原始 ADC 采样值，不受影响。
 //
-//   规格：中心 47Hz、带宽 14Hz（40~54Hz）、二阶状态变量（Chamberlin SVF）
+//   规格：中心 48Hz、带宽 20Hz（38~58Hz）、二阶状态变量（Chamberlin SVF）
 //   采样率 = ADCLK = 25.2MHz/8 = 3.15MHz（ADRC 每来一个 ad_val_valid 推进一次）
-//     f = 2*sin(pi*47/3.15MHz) = 9.376e-5  -> Q24 = 1573
-//     q = 1/Q = 14/47 = 0.2979            -> Q16 = 19524
+//     f = 2*sin(pi*48/3.15MHz) = 9.574e-5  -> Q24 = 1606
+//     q = 1/Q = 20/48 = 0.4167            -> Q16 = 27307  (Q=2.4)
 //   定点：状态 Q16（32bit），系数 Q24/Q16；乘积 Q40，右移 24 回到 Q16。
 //   节拍：en 每 8 个时钟来一次，用 4 拍状态机分时复用 2 个乘法器，
 //         输出比 en 晚 4 拍，用 dvalid 标出有效。
@@ -23,8 +23,8 @@ module bpf_ctrl (
     output reg         dvalid
 );
 
-    localparam signed [23:0] F_Q24 = 24'sd1573;    // 2*sin(pi*f0/fs)  Q24
-    localparam signed [15:0] Q_Q16 = 16'sd19521;   // 1/Q = 14/47      Q16
+    localparam signed [23:0] F_Q24 = 24'sd1606;    // 2*sin(pi*f0/fs)  Q24
+    localparam signed [15:0] Q_Q16 = 16'sd27307;   // 1/Q = 14/47      Q16
 
     reg signed [31:0] low;         // 低通状态 Q16
     reg signed [31:0] band;        // 带通状态 Q16
@@ -87,6 +87,7 @@ module bpf_ctrl (
     end
 
 endmodule
+
 
 
 
