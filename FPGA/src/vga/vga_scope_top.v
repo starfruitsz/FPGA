@@ -496,9 +496,12 @@ module vga_scope_top #(
     // ADC 直流偏置消除（AC 耦合）：均值跟踪 + 相减，只作用于显示通路。
     //   只在 AD/DA 模式启用（自发生模式的信号源本身没有偏置）。
     //------------------------------------------------------------------
-    dc_removal u_dc0 (.clk(clk), .rst(rst), .en(we0), .dc_on(adc_mode),
+    // [2026-11-01 关闭] 一次性校零会锁死"上电第一个采样"：若那一刻 ADC 还没输出
+    //   （din=0），零点就被锁成 0，整条波形被整体 +512 抬高并削顶 —— 表现为
+    //   "y 轴几乎没有、只剩一条贴顶的噪声带"。先直通，等确认采集通后再重新设计。
+    dc_removal u_dc0 (.clk(clk), .rst(rst), .en(we0), .dc_on(1'b0),
                       .din(ch0_in), .dout(ch0_dc));
-    dc_removal u_dc1 (.clk(clk), .rst(rst), .en(we1), .dc_on(adc_mode),
+    dc_removal u_dc1 (.clk(clk), .rst(rst), .en(we1), .dc_on(1'b0),
                       .din(ch1_in), .dout(ch1_dc));
 
     bpf50 u_bpf0 (.clk(clk), .rst(rst), .en(we0), .filt_on(sw_filt),
