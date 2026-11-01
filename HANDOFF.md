@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档（新会话从这里开始）
 
 > 生成时间：2026-11-01 23:30；最后更新：2026-11-02 00:20（Asia/Shanghai）
-> 当前固件：**scope_local29**（已烧 SRAM；Flash 里仍是 local28 的镜像，用户说"固化"再写）
+> 当前固件：**scope_local29**（已烧 SRAM + 已固化 Flash，回读 ver29 vs img29 前 4096 B `diff=0`）
 > 仓库：https://github.com/starfruitsz/FPGA.git（main 分支）
 
 ---
