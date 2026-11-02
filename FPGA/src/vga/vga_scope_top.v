@@ -577,13 +577,13 @@ module vga_scope_top #(
     wire [11:0] t0_col, t1_col;
 
     trace_layer #(
-        .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH0)
+        .H_VIS(H_VIS), .PLOT_H(PLOT_H), .COL(COL_CH0)
     ) u_tr0 (.px(px_d), .py(py_d), .de(de_d), .en(ch0_en),
              .s_now(s0), .s_prev(s0_prev),
              .vgain(vg0), .voff(voff0), .hit(t0_hit), .color(t0_col));
 
     trace_layer #(
-        .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL_CH1)
+        .H_VIS(H_VIS), .PLOT_H(PLOT_H), .COL(COL_CH1)
     ) u_tr1 (.px(px_d), .py(py_d), .de(de_d), .en(ch1_en),
              .s_now(s1), .s_prev(s1_prev),
              .vgain(vg1), .voff(voff1), .hit(t1_hit), .color(t1_col));

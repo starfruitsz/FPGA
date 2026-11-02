@@ -19,8 +19,8 @@
 module trace_layer #(
     parameter integer H_VIS       = 640,
     parameter integer PLOT_H      = 448,
-    parameter integer SCALE_NUM   = 7,
-    parameter integer SCALE_SHIFT = 4,
+    // [2026-11-02] 原 SCALE_NUM/SCALE_SHIFT 两个参数已随"Q12 连续增益"重构
+    //   变成死参数（映射改成 y = 223 - (s-512)*vgain/4096），删掉以免误导。
     parameter [11:0]  COL         = 12'h1F1
 )(
     input  wire [11:0] px,
@@ -41,10 +41,13 @@ module trace_layer #(
 //   1023 * 7 / 16 ≈ 447，正好铺满 0..447 的绘图区。
 // 为什么不用除法器？乘法+移位在 FPGA 里是纯 LUT，不需要 DSP，也不会引入时钟。
 //------------------------------------------------------------------
-    localparam [11:0] PLOT_TOP = PLOT_H - 1;
+    // [2026-11-02] 下面两个常量由 integer 参数派生，PLOT_H 只有几百，
+    //   截断到 12/19 位是安全的；显式限位是为了让 verilator 的 WIDTHTRUNC
+    //   不再对这种"参数派生常量"报噪音（-Wall 默认开着，会挡住真正的告警）
+    localparam [11:0] PLOT_TOP = PLOT_H[11:0] - 12'd1;
     // 有符号版的上边界：raw 坐标是 13bit 有符号，和它比较必须用有符号常量，
     // 否则负数会被当成大正数（Verilog 里 signed 与 unsigned 混算会整体转无符号）
-    localparam signed [18:0] Y_MAX = PLOT_H - 1;
+    localparam signed [18:0] Y_MAX = {7'd0, PLOT_H[11:0] - 12'd1};
 
     // 运行时缩放：以 512 为中心放大 7 倍后右移 vshift 位
     //   vshift=4 -> 增益 7/16 = 0.4375（满量程铺满 448 像素，与旧版一致）
@@ -61,8 +64,9 @@ module trace_layer #(
     // 2026-11-01：垂直档位由"右移位数"改成 Q12 增益，支持连续/更细的缩放
     wire signed [30:0] p_now  = d_now  * $signed({1'b0, vgain});
     wire signed [30:0] p_prev = d_prev * $signed({1'b0, vgain});
-    wire signed [18:0] z_now  = p_now  >>> 12;
-    wire signed [18:0] z_prev = p_prev >>> 12;
+    // 31bit 有符号右移 12 位后只剩 19 位，直接取 bit[30:12]（与 >>> 12 位等价）
+    wire signed [18:0] z_now  = p_now[30:12];
+    wire signed [18:0] z_prev = p_prev[30:12];
     wire signed [18:0] o      = $signed({{6{voff[12]}}, voff});
 
 //------------------------------------------------------------------
@@ -114,7 +118,10 @@ module trace_layer #(
 // 如果不过滤，屏幕左边缘会出现一条莫名其妙的竖线（初学者常见 bug）。
 // 其余条件：通道使能、在可见区、在绘图区内。
 //------------------------------------------------------------------
-    assign hit = en && de && (px != 12'd0) && (px < H_VIS) && (py < PLOT_H)
+    // [2026-11-02] 比较前先截到 12 位，避免 12bit vs integer(32bit) 的隐式扩展噪音
+    localparam [11:0] H_VIS12  = H_VIS[11:0];
+    localparam [11:0] PLOT_H12 = PLOT_H[11:0];
+    assign hit = en && de && (px != 12'd0) && (px < H_VIS12) && (py < PLOT_H12)
                  && (!seg_off_top) && (!seg_off_bot)
                  && (py >= y_lo) && (py <= y_hi);
     assign color = COL;

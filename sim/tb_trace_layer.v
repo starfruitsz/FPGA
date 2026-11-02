@@ -26,18 +26,18 @@ module tb_trace_layer;
     reg         en = 1'b1;
     reg  [9:0]  s_now = 10'd512;
     reg  [9:0]  s_prev = 10'd512;
-    reg  [2:0]  vshift = 3'd4;
+    reg  [15:0] vgain  = 16'd1792;   // Q12 增益：1792 = 7/16，等价于旧 vshift=4
     reg  signed [12:0] voff = 13'sd0;
 
     wire        hit;
     wire [11:0] color;
 
     trace_layer #(
-        .H_VIS(H_VIS), .PLOT_H(PLOT_H), .SCALE_NUM(7), .SCALE_SHIFT(4), .COL(COL)
+        .H_VIS(H_VIS), .PLOT_H(PLOT_H), .COL(COL)
     ) dut (
         .px(px), .py(py), .de(de), .en(en),
         .s_now(s_now), .s_prev(s_prev),
-        .vshift(vshift), .voff(voff),
+        .vgain(vgain), .voff(voff),
         .hit(hit), .color(color)
     );
 
@@ -51,7 +51,7 @@ module tb_trace_layer;
         integer d, z, y;
         begin
             d = s - 512;
-            z = (d * 7) >>> vs;
+            z = (d * (7 << (12 - vs))) >>> 12;
             y = 223 - z + vo;
             if (y < 0)        y = 0;
             if (y > PLOT_H-1) y = PLOT_H-1;
@@ -72,14 +72,16 @@ module tb_trace_layer;
         integer n_hit, kk;
         reg     exp_h;
         begin
-            s_now = sn; s_prev = sp; vshift = vs; voff = vo;
+            // 旧 TB 用 vshift(右移位数)，现改为 Q12 增益：vgain = 7<<(12-vs)
+            //   (d*7)>>>vs  与  (d*(7<<(12-vs)))>>>12  在二进制补码下逐位等价
+            s_now = sn; s_prev = sp; vgain = 7 << (12 - vs); voff = vo;
             px = x; en = en_i; de = de_i;
             #1;
 
             // 先补一位 0 再 $signed：10bit 直接 $signed 会把 1023 当成 -1。
             // 这样负半周做的是算术右移，与 RTL 的 >>> 一致。
-            rn = 223 - ((($signed({1'b0, sn}) - 512) * 7) >>> vs) + vo;
-            rp = 223 - ((($signed({1'b0, sp}) - 512) * 7) >>> vs) + vo;
+            rn = 223 - ((($signed({1'b0, sn}) - 512) * (7 << (12 - vs))) >>> 12) + vo;
+            rp = 223 - ((($signed({1'b0, sp}) - 512) * (7 << (12 - vs))) >>> 12) + vo;
             yn = y_model(sn, vs, vo);
             yp = y_model(sp, vs, vo);
             ylo = (yn < yp) ? yn : yp;

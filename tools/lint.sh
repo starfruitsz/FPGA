@@ -35,11 +35,11 @@ if [ "$#" -gt 0 ]; then
     BLOCK="$*"
     ADVISORY=""
 else
-    BLOCK="$ROOT/FPGA/src/vga/app/bpf_ctrl.v"
+    BLOCK="$ROOT/FPGA/src/vga/app/bpf_ctrl.v \
+$ROOT/FPGA/src/vga/abs/trace_layer.v"
     ADVISORY="$ROOT/FPGA/src/vga/app/bpf50.v \
 $ROOT/FPGA/src/vga/app/decim512.v \
 $ROOT/FPGA/src/eso.v \
-$ROOT/FPGA/src/vga/abs/trace_layer.v \
 $ROOT/FPGA/src/vga/app/scope_meas.v"
 fi
 
