@@ -1,36 +1,40 @@
 # 固件备份与回退
 
-> 目的：任何一次新固件出问题时，能在 5 分钟内退回**已知可用**版本。
-> 建立时间：2026-11-02
+> 规矩（2026-11-02 按用户要求简化）：**只备份"固化过"的版本**，综合出来没烧板子的不备份。
 
 ## 为什么需要单独备份
 
-`FPGA_TD/*_Runs/` 在 `.gitignore` 里，**比特流不进仓库**；而源码 diff 又无法还原
-"当时烧进板子的是哪一份 netlist"。所以要同时固定两样：**源码 tag** + **比特流实体**。
+`FPGA_TD/*_Runs/` 在 `.gitignore` 里，**比特流不进仓库**；源码 diff 又无法还原
+"当时烧进板子的是哪一份 netlist"。所以同时固定两样：
 
 - 源码回退点：git tag `fw-localNN`
-- 比特流实体：`backup/fw/localNN/`（受 git 管理，含 SHA256）
+- 比特流实体：`backup/fw/localNN/`（受 git 管理，附 SHA256）
 
-## 备份清单
+## 备份清单（按固化顺序）
 
-| 版本 | git tag | 比特流 | SHA256（前 12 位） | 已固化 Flash |
+| 版本 | git tag | 主要改动 | 比特流 SHA256（前 12 位） | Flash 校验 |
 |---|---|---|---|---|
-| local33 | `fw-local33` | `backup/fw/local33/scope_local33.bit`（638,952 B） | `8842fbe1b720` | ✅ ver33 vs img33 diff=0 |
+| local30 | `fw-local30` | SW13 带通总开关 + 带通系数 822350 | `357109671a97` | ver30 vs img30 diff=0 |
+| local31 | `fw-local31` | `qb_64` 补 `$signed()`（修"开关信号"） | `85e1add35df8` | 仅 SRAM |
+| local32 | `fw-local32` | verilator lint 门禁 + 位宽清理 | `74ad1621cce5` | ver32 vs img32 diff=0 |
+| local33 | `fw-local33` | trace_layer 位宽清理 + TB 适配 | `8842fbe1b720` | ver33 vs img33 diff=0 |
+
+> local31 当时只烧了 SRAM 没固化 Flash，但它是"开关信号"那次的修复版，一并留档。
 
 ## 回退步骤
 
-### A. 只退 SRAM（最快，约 25 s）
+### A. 退 SRAM（最快，约 25 s）
 
 ```bash
 cd /d/Desktop/fpga
 printf 'download -bit D:/Desktop/fpga/backup/fw/local33/scope_local33.bit -mode jtag_burst -spd 4 -cable 0\nexit\n' \
   | "/c/Anlogic/TD_5.6.5_SP5_170.155/bin/td_commands_prompt.exe" -nogui
 ```
+把 `local33` 换成要回退的版本号即可。
 
-### B. 退到 Flash（断电重启也生效，约 270 s）
+### B. 退 Flash（断电重启也生效，约 270 s）
 
 ```bash
-cd /d/Desktop/fpga
 printf 'download -bit D:/Desktop/fpga/backup/fw/local33/scope_local33.bit -mode program_spi -chip EG4S20BG256 -flashsize 32 -cable 0 -spd 1\nexit\n' \
   | "/c/Anlogic/TD_5.6.5_SP5_170.155/bin/td_commands_prompt.exe" -nogui
 ```
@@ -38,14 +42,19 @@ printf 'download -bit D:/Desktop/fpga/backup/fw/local33/scope_local33.bit -mode 
 ### C. 退源码
 
 ```bash
-git switch -c rollback/local33 fw-local33    # 建分支回退（推荐）
-# 或只读查看： git checkout fw-local33
+git switch -c rollback/local33 fw-local33
 ```
 
-## 新版本发布时必须做
+## 每次固化后必须做（3 步）
 
-1. 综合通过 → `cp` bit + tcl 到 `backup/fw/localNN/`，生成 `SHA256SUMS`
-2. 提交后 `git tag -f fw-localNN <commit>`，并 `git push origin fw-localNN`
-3. 在上表加一行（含 SHA256 前 12 位、是否已固化）
+```bash
+v=34    # 新版本号
+mkdir -p backup/fw/local$v
+cp FPGA_TD/scope_local$v"_Runs"/best_result/scope_local$v.bit backup/fw/local$v/
+cp FPGA_TD/make_scope_local$v.tcl backup/fw/local$v/
+( cd backup/fw/local$v && sha256sum * > SHA256SUMS )
+git tag -f fw-local$v <commit> && git push origin fw-local$v
+```
+然后在上表加一行。
 
-> 注：`downloads/_backup/` 是本地临时副本（被 .gitignore 忽略），**不作为正式备份**。
+> `downloads/_backup/` 只是本地临时副本（被 .gitignore 忽略），**不作为正式备份**。
