@@ -24,7 +24,7 @@
 > - local31 **确实固化过**（td_flash31.log 有 PRG-1001 + 回读 diff=0），早前写"仅 SRAM"是笔误。
 > - **local34 / local35 从未烧进板子**：板子在 2026-11-02 16:12 被用户断开，两个 burn 日志
 >   都是 `PRG-9505 USB device open error`，故不入备份清单。
-> - 2026-11-03 20:37 板子接回，**local36 已烧 SRAM + 固化 Flash 并回读 diff=0**；
+> - 2026-11-02 20:37 板子接回，**local36 已烧 SRAM + 固化 Flash 并回读 diff=0**；
 >   板上/Flash 当前固件 = **scope_local36**（回读时第一次 PRG-9505 属 USB 瞬时占用，重试即通过）。
 
 ## 回退步骤

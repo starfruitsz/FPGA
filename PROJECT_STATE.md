@@ -823,7 +823,7 @@ TOTAL: PASS=21  FAIL=0  SKIP=0     （上一轮 17/4）
 LUT 7379/19600、REG 2325、slack +6.038 ns、0 setup/0 hold
 ```
 
-> ⚠️ **更正（2026-11-03）**：local34 **并没有烧进板子**。当时 JTAG 已断开，
+> ⚠️ **更正（2026-11-02）**：local34 **并没有烧进板子**。当时 JTAG 已断开，
 > `td_burn34.log` 里是 `PRG-9505 USB device open error` —— 这一条之前写错了。
 > 板子/Flash 里实际跑的是 **scope_local33**。
 
@@ -835,7 +835,7 @@ lint ADVISORY 剩 30 条（eso 24 / scope_meas 3 / decim512 2 / bpf50 1）。
 
 ---
 
-## 23. 2026-11-03：给三个"无 TB"模块补测试，又抓出第 4 个真 bug（固件 scope_local35）
+## 23. 2026-11-02：给三个"无 TB"模块补测试，又抓出第 4 个真 bug（固件 scope_local35）
 
 按"先补 TB 再改位宽"的规矩，本轮先写三个独立 testbench，再动 RTL。
 
@@ -880,14 +880,14 @@ TOTAL: PASS=24  FAIL=0  SKIP=0
 LUT 7407/19600、REG 2331、slack +6.595 ns、0 setup/0 hold
 ```
 
-> ⚠️ **更正（2026-11-03）**：local35 **没有烧进去**。板子在上一轮就已经被用户断开，
+> ⚠️ **更正（2026-11-02）**：local35 **没有烧进去**。板子在上一轮就已经被用户断开，
 > `td_burn35.log` = `PRG-9505 USB device open error`。
 > 结论：local35 只是"综合成功 + 回归全绿"的候选固件，**板上仍是 scope_local33**。
 > 等 USB 接回后再 `download`（必要时固化），并按规矩补 `backup/fw/local35`。
 
 ---
 
-## 24. 2026-11-03：eso 的 24 条宽度告警清零（**ADVISORY 归零**）
+## 24. 2026-11-02：eso 的 24 条宽度告警清零（**ADVISORY 归零**）
 
 ### 24.1 方法：先立金标准，再动刀
 
@@ -937,7 +937,7 @@ TOTAL: PASS=24 FAIL=0 SKIP=0
 scope_local36: LUT 7410/19600、REG 2330、slack +5.374 ns、0 setup/0 hold
 ```
 
-> ✅ **2026-11-03 20:37 板子接回后已烧写并固化**：
+> ✅ **2026-11-02 20:37 板子接回后已烧写并固化**：
 > SRAM `PRG-2014` 校验通过（25.4 s）；Flash `program_spi -spd 1` 269 s，
 > `PRG-1001` Flash ID=c8；回读 `ver36` vs `img36` 前 4096 B **diff=0**。
 > 板上/Flash 当前固件 = **scope_local36**（备份 `backup/fw/local36`，tag `fw-local36`）。
