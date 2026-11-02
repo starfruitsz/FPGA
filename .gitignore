@@ -25,3 +25,6 @@ sim/_build/
 downloads/
 FPGA_TD/*_Runs/
 FPGA/src/work/
+
+# 交付用的代码打包目录（导出产物，不纳入版本库）
+嵌入式FPGA代码/

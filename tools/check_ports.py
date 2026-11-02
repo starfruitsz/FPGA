@@ -57,11 +57,18 @@ for p, src in files.items():
             else:
                 cur += ch
         parts.append(cur)
+        # [2026-11-03 修复] 支持 "input wire [3:0] v0, v1, v2" 这种一次声明多个名字的写法：
+        #   原来遇到没有方向关键字的片段就 continue，于是 v1..v8 全被判成"不存在的端口"，
+        #   menu_layer 因此误报 15 条 PORT MISMATCH（狼来了的检查器没人会看）。
+        carry = False
         for part in parts:
             part = part.strip()
             if not part: continue
             mm = re.match(r'(input|output|inout)\b', part)
-            if not mm: continue
+            if mm:
+                carry = True
+            elif not carry:
+                continue
             # 去掉方向/类型/位宽, 取最后标识符
             ids = re.findall(r'[A-Za-z_]\w*', part)
             if ids:
