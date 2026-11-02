@@ -1,7 +1,7 @@
 # HANDOFF — 交接文档（新会话从这里开始）
 
 > 生成时间：2026-11-01 23:30；最后更新：2026-11-02 00:20（Asia/Shanghai）
-> 当前固件：**scope_local32**（带通有符号乘法修复 + verilator lint 门禁与位宽清理；已烧 SRAM + 已固化 Flash，回读 ver32 vs img32 前 4096 B `diff=0`）
+> 当前固件：**scope_local33**（带通有符号乘法修复 + lint 门禁 + trace_layer 位宽清理；已烧 SRAM + 已固化 Flash，回读 ver33 vs img33 前 4096 B `diff=0`）
 > 仓库：https://github.com/starfruitsz/FPGA.git（main 分支）
 
 ---
