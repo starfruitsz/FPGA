@@ -134,10 +134,15 @@ module sparkroad_scope_top #(
     // SW8(N8)：工作模式（拨上=ADC 模式，拨下=自发生模式）
     wire sw8_lv;
     sw_edge u_sw8 (.clk(clk), .rst(rst), .sw_in(sw[8]), .lv(sw8_lv), .rise());
-    // SW14(T15)：ADRC 控制量 u 的符号（拨上 = 取反）；SW15(R15)：50Hz 带通显示滤波
+    // SW14(T15)：ADRC 控制量 u 的符号（拨上 = 取反）；SW15(R15)：显示平滑滤波（卡尔曼）
     wire sw14_lv, sw15_lv;
     sw_edge u_sw14 (.clk(clk), .rst(rst), .sw_in(sw[14]), .lv(sw14_lv), .rise());
     sw_edge u_sw15 (.clk(clk), .rst(rst), .sw_in(sw[15]), .lv(sw15_lv), .rise());
+    // [2026-11-02] SW13(R14)：算法级 48Hz 带通滤波器总开关（拨上=开）
+    //   拨上：显示屏 CH0 = 带通输出，ADRC 的 y 也取带通输出（SW15 显示滤波失效）
+    //   拨下：显示屏 CH0 = 原始 ADC，ADRC 的 y 也取原始采样（SW15 显示滤波生效）
+    wire sw13_lv;
+    sw_edge u_sw13 (.clk(clk), .rst(rst), .sw_in(sw[13]), .lv(sw13_lv), .rise());
     // 函数发生器参数：CH0/CH1 各一套，完全独立（菜单 P1 页分别调整）
     wire [1:0] gen_wave0, gen_wave1;
     wire [2:0] gen_freq0, gen_freq1;
@@ -265,7 +270,12 @@ module sparkroad_scope_top #(
         .dout(ad_bpf), .dvalid(ad_bpf_v)
     );
 
-    wire signed [10:0] ad_y11 = $signed({1'b0, ad_bpf}) - y_ref;
+    // [2026-11-02] 按用户需求加 SW13 总开关：
+    //   拨上 = 带通开启：显示与 ADRC 的 y 都取带通输出 ad_bpf；
+    //   拨下 = 带通关闭：两者都取原始采样 ad_val（此时 SW15 的显示滤波才生效）。
+    wire       bpf_on  = sw13_lv;
+    wire [9:0] ad_ctrl = bpf_on ? ad_bpf : ad_val;   // 显示 + 控制共用的输入源
+    wire signed [10:0] ad_y11 = $signed({1'b0, ad_ctrl}) - y_ref;
     wire signed [9:0]  ad_y   = ad_y11[9:0];        // -512..+511 正好装进 10bit 补码
     wire signed [9:0]  ad_y_eff = adrc_on ? ad_y : 10'sd0;   // SW6 拨下 -> y=0
     wire signed [9:0]  eso_u;                       // eso 输出的控制量 u（有符号补码）
@@ -333,7 +343,8 @@ module sparkroad_scope_top #(
     wire [9:0] ch1_val;                 // CH1 源值（送显示/采集）
     wire       ch_val;                  // 采样有效
 
-    assign ch0_val = adc_mode ? ad_val  : gen0_data;
+    //   AD/DA 模式下 CH0 的数据源由 SW13 决定：拨上=带通输出，拨下=原始采样
+    assign ch0_val = adc_mode ? ad_ctrl : gen0_data;
     assign ch1_val = adc_mode ? adrc_da : gen1_data;
     assign ch_val  = adc_mode ? ad_val_valid : (gen0_valid | gen1_valid);
 
@@ -398,7 +409,7 @@ module sparkroad_scope_top #(
         .ch1_in    (ch1_val),
         .adc_valid (ch_val),
         .adc_mode  (adc_mode),     // ADC 模式: 关掉内置信号源(GEN_ENA)相关路径
-        .sw_filt   (sw15_lv),      // SW15: 送显示前过 50Hz 带通
+        .sw_filt   (sw15_lv & ~bpf_on),  // SW15: 显示平滑滤波，仅在 SW13 带通关闭时生效
         .key_n     (key_n),
         .sw_menu   (sw0_lv),          // 电平：拨上=菜单开
         .sw_run    (sw_run_eff),      // 电平：拨上=冻结；ADC 未就绪时强制冻结
@@ -545,7 +556,7 @@ module sparkroad_scope_top #(
     end
 
     // LED[15]=SW14 读到 1、LED[14]=SW15 读到 1（低电平点亮，亮 = 该位为 1）
-    wire [15:0] led_map = { sw14_lv, sw15_lv, 5'h00,   // 15:14 = SW14/SW15 状态，13:9 预留
+    wire [15:0] led_map = { sw14_lv, sw15_lv, bpf_on, 4'h0,  // 15:14=SW14/SW15，13=SW13(带通)，12:9 预留
                             sel_ch,          // 8 选中通道（1=CH1）
                             dbg_status[2],   // 7 运行
                             dbg_status[3],   // 6 滚动
