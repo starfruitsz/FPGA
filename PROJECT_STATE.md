@@ -937,6 +937,8 @@ TOTAL: PASS=24 FAIL=0 SKIP=0
 scope_local36: LUT 7410/19600、REG 2330、slack +5.374 ns、0 setup/0 hold
 ```
 
-> ⚠️ 板子仍未接回，local36 **只综合、未烧写**：`td_burn36.log` 是
-> `PRG-9505 USB device open error`。板上/Flash 里仍是 **scope_local33**。
+> ✅ **2026-11-03 20:37 板子接回后已烧写并固化**：
+> SRAM `PRG-2014` 校验通过（25.4 s）；Flash `program_spi -spd 1` 269 s，
+> `PRG-1001` Flash ID=c8；回读 `ver36` vs `img36` 前 4096 B **diff=0**。
+> 板上/Flash 当前固件 = **scope_local36**（备份 `backup/fw/local36`，tag `fw-local36`）。
 
