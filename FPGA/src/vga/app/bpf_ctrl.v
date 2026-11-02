@@ -61,8 +61,12 @@ module bpf_ctrl (
     //   -1000 会被当成 0x00000000FFFFFC18(≈4.29e9)，乘积巨大且为正，
     //   再 >>>16（无符号即逻辑右移）得到错误的 qb，于是 high/band 被彻底带偏：
     //   输入正弦 -> 输出在两端来回跳，实测就是用户看到的"开关信号"方波。
-    //   位精确模型（Python，tools/bpf_model.py）复现：
-    //     修前 pp=595（214/809 两电平跳动）；修后 pp=201（输入 pp=200，增益 1.0）
+    //   验证（两条独立路径，2026-11-02）：
+    //     1) RTL 仿真 sim/tb_bpf_ctrl.v：输入 48Hz/±47 码
+    //          修复前 gain=5.181 FAIL（pp=487）；修复后 gain=0.989 PASS（pp=93）
+    //     2) 位精确 Python 模型 tools/bpf_model.py：修复前 pp=595、修复后 pp=201
+    //   注：早前误判"Icarus 对该乘法段错误"，真因是 vvp 的 PATH 漏了
+    //   oss-cad-suite/lib（DLL 目录），补上后单模块 TB 可以正常跑。
     wire signed [63:0] qb_64 = band * $signed({48'b0, Q_Q16});
 
     wire signed [31:0] band_n = band + t3;

@@ -62,7 +62,10 @@ cmp -n 4096 downloads/verNN.bin downloads/imgNN.bin   # 必须一致
 export PATH="/d/Desktop/fpga/downloads/oss-cad-suite/bin:/d/Desktop/fpga/downloads/oss-cad-suite/lib:$PATH"
 cd /d/Desktop/fpga && pwsh -File sim/run_all.ps1 -IverilogPath /d/Desktop/fpga/downloads/oss-cad-suite/bin
 ```
-当前：**16 PASS / 4 FAIL**（4 项是 tb_vga_scope_top 系旧期望值，见 §8）。
+当前：**16 PASS / 5 FAIL**（用例总数 21，2026-11-02 新增 tb_bpf_ctrl；
+5 项失败见 PROJECT_STATE §20.3：两个 TB 端口过期 + 三个旧期望值）。
+**注意：运行 vvp 时 PATH 必须同时含 `oss-cad-suite/bin` 和 `oss-cad-suite/lib`，
+少了 lib 会段错误（exit 139），别误判成模拟器 bug。**
 
 ---
 

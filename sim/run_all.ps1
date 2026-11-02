@@ -76,6 +76,9 @@ $cases = @(
     @{ n = 'ad_da_par';      tb = 'tb_ad_da_par.v';      srcs = @('ad_da_par.v') },
     # ESO(ADRC) 观测器: sys_clk 域 + 每采样一次使能（en=0 时状态保持）
     @{ n = 'eso';            tb = 'tb_eso.v';            srcs = @('eso.v') },
+    # 48Hz 算法带通: 48Hz 正弦输入 -> 中心增益 1.0（2026-11-02 注册，
+    #   在此之前它写了却没进回归，导致有符号乘法 bug 一路带到板上）
+    @{ n = 'bpf_ctrl';       tb = 'tb_bpf_ctrl.v';       srcs = @('vga\app\bpf_ctrl.v') },
     # 整机: ADC + 并口 AD/DA + ADRC + VGA + 数码管 + 串口
     @{ n = 'sparkroad_top';  tb = 'tb_sparkroad_top.v'; local = @('ad7606_model.v');
        srcs = @('sparkroad_scope_top.v', 'ad_da_par.v', 'eso.v',
