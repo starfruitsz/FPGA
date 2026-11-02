@@ -92,7 +92,7 @@ parameter signed B01=21'd90;
 parameter signed B02=21'd2700; 
 parameter signed B03=21'd27000; 
 parameter signed b0=16'd5000; 
-parameter signed n = 2'd1; 
+// [2026-11-03] 原 parameter n 从未使用（verilator UNUSEDPARAM），删除
  
 //------------------------------------------------------------------------------
 // 状态寄存器 z1k1/z2k1/z3k1: 当前状态 z(k), 只在 pv[2]=1 的那一拍更新
@@ -163,7 +163,11 @@ always@(posedge ad_clk or negedge sys_rst_n)
 //   移位放到下一级做(移位只是接线, 不占逻辑)
 //------------------------------------------------------------------------------
 wire signed [`WIDTH - 1 + 1: 0] sub_p; 
-assign sub_p = z1k1 - y_r; 
+// [2026-11-03] 全部改成"显式符号扩展到目标位宽"：语义与 Verilog 隐式扩展逐位等价，
+//   只是把 verilator 会报警的落脚点写明。每处改完都用 tb_eso 的三组阶跃数字逐字比对。
+wire signed [`WIDTH - 1 + 1: 0] z1_sub_x = {{1{z1k1[`WIDTH-1]}}, z1k1};
+wire signed [`WIDTH - 1 + 1: 0] y_sub_x  = {{(`WIDTH - 9){y_r[9]}}, y_r};
+assign sub_p = z1_sub_x - y_sub_x; 
 
 wire signed [`WIDTH - 1 + 1 + 21: 0] sub_B01_p; 
 wire signed [`WIDTH - 1 + 1 + 21: 0] sub_B02_p; 
@@ -221,9 +225,15 @@ assign z3k1_h = z3k1 >>> 10;
 wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] d1_p; 
 wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] d2_p; 
 wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] d3_p; 
-assign d1_p = z2k1_h - sub_B01_h; 
-assign d2_p = z3k1_h - sub_B02_h + uk_b0_h; 
-assign d3_p = -sub_B03_h; 
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z2h_x  = {{(`WIDTH + 4){z2k1_h[`WIDTH-1]}}, z2k1_h};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z3h_x  = {{(`WIDTH + 4){z3k1_h[`WIDTH-1]}}, z3k1_h};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] sb1_x  = {{2{sub_B01_h[`WIDTH + 21]}}, sub_B01_h};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] sb2_x  = {{2{sub_B02_h[`WIDTH + 21]}}, sub_B02_h};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] sb3_x  = {{2{sub_B03_h[`WIDTH + 21]}}, sub_B03_h};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] ukb0_x = {{8{uk_b0_h[`WIDTH + 15]}}, uk_b0_h};
+assign d1_p = z2h_x - sb1_x; 
+assign d2_p = z3h_x - sb2_x + ukb0_x; 
+assign d3_p = {`WIDTH + 24{1'b0}} - sb3_x;   // 取负改成 0-x，宽度与 d3_p 对齐
 
 reg signed [`WIDTH - 1 + 1 + 21 + 2: 0] d1_r; 
 reg signed [`WIDTH - 1 + 1 + 21 + 2: 0] d2_r; 
@@ -254,9 +264,12 @@ always@(posedge ad_clk or negedge sys_rst_n)
 wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z1n; 
 wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z2n; 
 wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z3n; 
-assign z1n = z1k1 + d1_r; 
-assign z2n = z2k1 + d2_r; 
-assign z3n = z3k1 + d3_r; 
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z1_44 = {{(`WIDTH + 4){z1k1[`WIDTH-1]}}, z1k1};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z2_44 = {{(`WIDTH + 4){z2k1[`WIDTH-1]}}, z2k1};
+wire signed [`WIDTH - 1 + 1 + 21 + 2: 0] z3_44 = {{(`WIDTH + 4){z3k1[`WIDTH-1]}}, z3k1};
+assign z1n = z1_44 + d1_r; 
+assign z2n = z2_44 + d2_r; 
+assign z3n = z3_44 + d3_r; 
 
 wire signed [`WIDTH - 1: 0] z1q; 
 wire signed [`WIDTH - 1: 0] z2q; 
@@ -303,7 +316,9 @@ always@(posedge ad_clk or negedge sys_rst_n)
 //   本拍同时把 err2 和 z3 打拍给最后一级, 最后一级只读寄存器。
 //------------------------------------------------------------------------------
 wire signed [`WIDTH + 13 -1: 0] she; 
-assign she = err1_r + z2s_r; //s=ce1+e2 
+wire signed [`WIDTH + 13 -1: 0] err1_x = {{1{err1_r[`WIDTH + 11]}}, err1_r};
+wire signed [`WIDTH + 13 -1: 0] z2s_x  = {{(`WIDTH - 7){z2s_r[`WIDTH-1]}}, z2s_r};
+assign she = err1_x + z2s_x; //s=ce1+e2 
 
 wire signed [4 : 0] sgn; 
 assign sgn = (she > 0) ? 5'sd1 : -5'sd1; 
@@ -340,20 +355,27 @@ always@(posedge ad_clk or negedge sys_rst_n)
 //   (端口仍声明为 wire, 内部寄存器 out_da_r 打一拍后 assign 出去, 端口表不变)
 //------------------------------------------------------------------------------
 wire signed [`WIDTH + 22 -1: 0] v_1; 
-assign v_1 = kshe_r + sgn_r + err2_s; 
+// 中间量 44bit（= kshe_r 位宽），最后截到 v_1 的 42bit，与原 42bit 上下文截断等价
+wire signed [`WIDTH + 13 + 11 -1: 0] sgn_x  = {{(`WIDTH + 19){sgn_r[4]}}, sgn_r};
+wire signed [`WIDTH + 13 + 11 -1: 0] err2_x = {{(`WIDTH - 8){err2_s[`WIDTH + 11]}}, err2_s};
+wire signed [`WIDTH + 13 + 11 -1: 0] v1_x   = kshe_r + sgn_x + err2_x;
+assign v_1 = v1_x[`WIDTH + 22 -1: 0];   // 低 42 位
 
 wire signed [`WIDTH + 21 -1: 0] viout; 
-assign viout = v_1 - z3_s; //ks+sgn+cz2-f 
+wire signed [`WIDTH + 22 -1: 0] z3_x  = {{(`WIDTH + 2){z3_s[`WIDTH-1]}}, z3_s};
+wire signed [`WIDTH + 22 -1: 0] vi_x  = v_1 - z3_x;
+assign viout = vi_x[`WIDTH + 21 -1: 0]; //ks+sgn+cz2-f（低 41 位，等价）
 
 wire signed [40 -1: 0] b_raw;
-assign b_raw = viout >>> 15;
+wire signed [`WIDTH + 21 -1: 0] b_shr = viout >>> 15;
+assign b_raw = b_shr[40 -1: 0];          // 取低 40 位，等价于原赋值截断
 
 // [2026-11-01] 输出限幅到 DAC 码范围 ±512：
 //   原实现直接取 b_raw[9:0]，当控制量超过 ±512 时低 10 位会"回卷"，
 //   看上去像突然变成正数/负数的怪值，也让后面的符号翻转看不出效果。
 wire signed [40 -1: 0] b;
-assign b = (b_raw > 41'sd511)  ? 41'sd511  :
-           (b_raw < -41'sd512) ? -41'sd512 : b_raw; 
+assign b = (b_raw > 40'sd511)  ? 40'sd511  :
+           (b_raw < -40'sd512) ? -40'sd512 : b_raw; 
 
 reg signed [9:0] out_da_r; 
 
@@ -383,9 +405,9 @@ always@(posedge ad_clk or negedge sys_rst_n)
     else
         begin
             if(c_flag==1'b1)
-                c<=c_date;
+                c<=c_date[9:0];
             if(k_flag==1'b1)
-                k<=k_date;
+                k<=k_date[10:0];
         end
  
 //------------------------------------------------------------------------------

@@ -885,3 +885,58 @@ LUT 7407/19600、REG 2331、slack +6.595 ns、0 setup/0 hold
 > 结论：local35 只是"综合成功 + 回归全绿"的候选固件，**板上仍是 scope_local33**。
 > 等 USB 接回后再 `download`（必要时固化），并按规矩补 `backup/fw/local35`。
 
+---
+
+## 24. 2026-11-03：eso 的 24 条宽度告警清零（**ADVISORY 归零**）
+
+### 24.1 方法：先立金标准，再动刀
+
+改之前先跑一遍 `tb_eso` 并把**完整输出存盘**（`sim/_build/golden/eso_before.txt`），
+改完再跑一遍 `diff`。任何一行数字不同就算失败。
+
+```
+IDENTICAL
+  step+100: y=100 -> 稳态 z1 均值=100 峰峰=9 末值=99 z2=-459 z3=269 out_da=6
+  step-100: y=-100 -> 稳态 z1 均值=-99 峰峰=7 末值=-101 z2=-455 z3=501 out_da=-12
+  step0:    y=0   -> 稳态 z1 均值=0 峰峰=0 末值=0 z2=2 z3=54 out_da=0
+  流水线延迟: 状态 4 拍(期望 4), out_da 6 拍(期望 6)
+```
+
+### 24.2 改法：把隐式符号扩展写成显式（位等价）
+
+| 位置 | 原写法 | 现写法 |
+|---|---|---|
+| `:166` | `sub_p = z1k1 - y_r` | 两端各扩到 21bit：`z1_sub_x / y_sub_x` |
+| `:224-226` | `d1/d2/d3_p = z*h ± sub_B0x ± uk_b0` | 各操作数先扩到 44bit（`z2h_x/sb1_x/ukb0_x`），取负改 `0 - x` |
+| `:257-259` | `z1n = z1k1 + d1_r` | `z1_44 + d1_r` |
+| `:306` | `she = err1_r + z2s_r` | 两端扩到 33bit |
+| `:343` | `v_1 = kshe_r + sgn_r + err2_s` | 44bit 中间量求和后取低 42 位 |
+| `:346` | `viout = v_1 - z3_s` | 42bit 中间量后取低 41 位 |
+| `:349` | `b_raw = viout >>> 15` | 41bit `b_shr` 后取低 40 位 |
+| `:355` | 比较用 41bit 常量 | 改 40bit 常量（值域 511/-512 装得下）|
+| `:386/388` | `c<=c_date; k<=k_date;` | 显式切片 `c_date[9:0]` / `k_date[10:0]` |
+| `:95` | `parameter n = 2'd1`（从未使用）| 删除 |
+
+> 关键依据：二进制补码下"先扩宽 44bit 再截低 42bit"与"直接在 42bit 上下文里算"
+> 结果**逐位相同**（截断与加法可交换）。所以这批改动是等价改写，不是行为变更——
+> `diff` 输出 IDENTICAL 就是证据。
+
+### 24.3 门禁现状
+
+```
+== BLOCK ==   bpf_ctrl / trace_layer / decim512 / bpf50 / scope_meas / eso   全部 OK
+== ADVISORY ==  （空）
+```
+
+**从最初 38 条告警，到现在 0 条；6 个定点运算模块全部进门禁。**
+
+### 24.4 固件
+
+```
+TOTAL: PASS=24 FAIL=0 SKIP=0
+scope_local36: LUT 7410/19600、REG 2330、slack +5.374 ns、0 setup/0 hold
+```
+
+> ⚠️ 板子仍未接回，local36 **只综合、未烧写**：`td_burn36.log` 是
+> `PRG-9505 USB device open error`。板上/Flash 里仍是 **scope_local33**。
+

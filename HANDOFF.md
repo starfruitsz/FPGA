@@ -65,7 +65,8 @@ cd /d/Desktop/fpga && pwsh -File sim/run_all.ps1 -IverilogPath /d/Desktop/fpga/d
 当前：**24 PASS / 0 FAIL**（用例总数 24；2026-11-03 新增 decim512/bpf50/scope_meas 三个 TB）。
 本轮还修出 3 个 RTL 真 bug（自动量程居中乘法位宽、夹紧限位乘法位宽、
 信号源模式被上电保护永久冻结），详见 PROJECT_STATE §22。
-lint 门禁：`bash tools/lint.sh`（BLOCK=bpf_ctrl+trace_layer 零告警；ADVISORY 30 条）。
+lint 门禁：`bash tools/lint.sh` —— **6 个定点模块全部零告警**（bpf_ctrl / trace_layer /
+decim512 / bpf50 / scope_meas / eso），ADVISORY 已归零（2026-11-03）。
 **注意：运行 vvp 时 PATH 必须同时含 `oss-cad-suite/bin` 和 `oss-cad-suite/lib`，
 少了 lib 会段错误（exit 139），别误判成模拟器 bug。**
 
