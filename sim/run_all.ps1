@@ -76,6 +76,12 @@ $cases = @(
     @{ n = 'ad_da_par';      tb = 'tb_ad_da_par.v';      srcs = @('ad_da_par.v') },
     # ESO(ADRC) 观测器: sys_clk 域 + 每采样一次使能（en=0 时状态保持）
     @{ n = 'eso';            tb = 'tb_eso.v';            srcs = @('eso.v') },
+    # 512 点累加抽取（2026-11-02 新增）
+    @{ n = 'decim512';       tb = 'tb_decim512.v';       srcs = @('vga\app\decim512.v') },
+    # 显示平滑滤波（一阶稳态卡尔曼）（2026-11-02 新增）
+    @{ n = 'bpf50';          tb = 'tb_bpf50.v';          srcs = @('vga\app\bpf50.v') },
+    # 波形测量 Vpp/Vmax/Vmin/Vmean/频率/占空比（2026-11-02 新增）
+    @{ n = 'scope_meas';     tb = 'tb_scope_meas.v';     srcs = @('vga\app\scope_meas.v') },
     # 48Hz 算法带通: 48Hz 正弦输入 -> 中心增益 1.0（2026-11-02 注册，
     #   在此之前它写了却没进回归，导致有符号乘法 bug 一路带到板上）
     @{ n = 'bpf_ctrl';       tb = 'tb_bpf_ctrl.v';       srcs = @('vga\app\bpf_ctrl.v') },

@@ -36,11 +36,12 @@ if [ "$#" -gt 0 ]; then
     ADVISORY=""
 else
     BLOCK="$ROOT/FPGA/src/vga/app/bpf_ctrl.v \
-$ROOT/FPGA/src/vga/abs/trace_layer.v"
-    ADVISORY="$ROOT/FPGA/src/vga/app/bpf50.v \
+$ROOT/FPGA/src/vga/abs/trace_layer.v \
 $ROOT/FPGA/src/vga/app/decim512.v \
-$ROOT/FPGA/src/eso.v \
+$ROOT/FPGA/src/vga/app/bpf50.v \
 $ROOT/FPGA/src/vga/app/scope_meas.v"
+    # 只剩 eso（24 条）待清：它有 tb_eso 兜底，下一轮做
+    ADVISORY="$ROOT/FPGA/src/eso.v"
 fi
 
 echo "verilator: $("$BIN" --version 2>/dev/null | head -1)"

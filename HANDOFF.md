@@ -62,7 +62,7 @@ cmp -n 4096 downloads/verNN.bin downloads/imgNN.bin   # 必须一致
 export PATH="/d/Desktop/fpga/downloads/oss-cad-suite/bin:/d/Desktop/fpga/downloads/oss-cad-suite/lib:$PATH"
 cd /d/Desktop/fpga && pwsh -File sim/run_all.ps1 -IverilogPath /d/Desktop/fpga/downloads/oss-cad-suite/bin
 ```
-当前：**21 PASS / 0 FAIL**（用例总数 21，2026-11-02 全绿）。
+当前：**24 PASS / 0 FAIL**（用例总数 24；2026-11-03 新增 decim512/bpf50/scope_meas 三个 TB）。
 本轮还修出 3 个 RTL 真 bug（自动量程居中乘法位宽、夹紧限位乘法位宽、
 信号源模式被上电保护永久冻结），详见 PROJECT_STATE §22。
 lint 门禁：`bash tools/lint.sh`（BLOCK=bpf_ctrl+trace_layer 零告警；ADVISORY 30 条）。

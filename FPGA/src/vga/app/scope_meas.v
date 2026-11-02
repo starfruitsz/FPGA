@@ -11,7 +11,7 @@
 `timescale 1ns / 1ps
 
 module scope_meas #(
-    parameter integer THRESH = 512
+    parameter [9:0]   THRESH = 10'd512
 )(
     input  wire        clk,
     input  wire        rst,
@@ -27,7 +27,7 @@ module scope_meas #(
     output reg  [7:0]  duty
 );
 
-    localparam [9:0] TH = THRESH;
+    localparam [9:0] TH = THRESH;   // THRESH 已改成 10bit 参数，直接同宽
 
     reg [9:0]  vmax_i, vmin_i;
     reg [15:0] cnt;
@@ -39,6 +39,9 @@ module scope_meas #(
     reg [9:0]  din_d;
 
     wire rise = (din_d < TH) && (din >= TH);
+
+    // [2026-11-02] 占空比分子：放到 17bit 上下文里算，避免 9bit 乘积溢出
+    wire [16:0] duty_mul = high_cnt * 8'd100;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -56,7 +59,9 @@ module scope_meas #(
             vmean  <= sum[17:8];
             period <= period_lat;
             freq   <= cnt * 16'd60;
-            duty   <= (win_cnt == 9'd0) ? 8'd0 : ((high_cnt * 8'd100) >> 8);
+            // [2026-11-02 修复] high_cnt(9bit) * 8'd100 的乘积宽度按 max(9,8)=9bit 算，
+            //   128*100=12800 直接溢出（实测 duty 恒为 0）。必须先放到 17bit 上下文。
+            duty   <= (win_cnt == 9'd0) ? 8'd0 : duty_mul[15:8];
 
             vmax_i <= 10'd0;      vmin_i <= 10'h3FF;
             cnt <= 16'd0;         period_cnt <= 16'd0;

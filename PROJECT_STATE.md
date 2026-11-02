@@ -829,3 +829,52 @@ lint ADVISORY 剩 30 条（eso 24 / scope_meas 3 / decim512 2 / bpf50 1）。
 规矩不变：**没有专门 TB 的模块不为消警告改位宽**（整机 TB 只能证明"没炸"，
 不能证明位等价）。
 
+---
+
+## 23. 2026-11-03：给三个"无 TB"模块补测试，又抓出第 4 个真 bug（固件 scope_local35）
+
+按"先补 TB 再改位宽"的规矩，本轮先写三个独立 testbench，再动 RTL。
+
+### 23.1 新增 testbench（3 个，回归 21 -> 24 例）
+
+| 用例 | 判据 |
+|---|---|
+| `tb_decim512` | 常数 600 ×512 → dout=600；交替 400/600 → 500；满量程 1023 不溢出；dvalid 每 512 采样恰好 1 次 |
+| `tb_bpf50` | filt_on=0 直通；阶跃 512→700 单调收敛到 ±1 且**无过冲**；反向阶跃；关滤波立即直通 |
+| `tb_scope_meas` | 交替 400/600：vmax/vmin/vpp/vmean/duty/freq = 600/400/200/500/50/7680；恒定 512；满量程 |
+
+### 23.2 第 4 个真 bug：占空比恒为 0
+
+```verilog
+// 错：9bit * 8bit 的乘积按 9bit 算，128*100=12800 溢出
+duty <= (win_cnt == 9'd0) ? 8'd0 : ((high_cnt * 8'd100) >> 8);
+```
+
+TB 直接抓到：期望 50%，实测 **0**。改为 17bit 中间量 `duty_mul[15:8]`。
+这是"Verilog 乘法结果宽度取操作数最大值"这个坑的**第 5 次出现**
+（bpf_ctrl 的 qb_64、vga_scope_top 的 fine/zpk、scope_meas 的 duty）。
+
+### 23.3 位宽清理（都有 TB 复验，位等价）
+
+| 模块 | 改动 | 验证 |
+|---|---|---|
+| `decim512` | `(acc+din)>>9` → 19bit `acc_sum[18:9]` | tb_decim512 PASS |
+| `bpf50` | `mul >>> 16` → `mul[39:16]` | tb_bpf50 PASS |
+| `scope_meas` | `THRESH` 改 10bit 参数；duty 用 17bit 中间量 | tb_scope_meas PASS |
+
+### 23.4 门禁
+
+| | 本轮前 | 本轮后 |
+|---|---|---|
+| BLOCK（零告警） | 2 个模块 | **5 个**（+decim512/bpf50/scope_meas）|
+| ADVISORY | 30 条 | **24 条（只剩 eso）** |
+
+### 23.5 结果
+
+```
+TOTAL: PASS=24  FAIL=0  SKIP=0
+LUT 7407/19600、REG 2331、slack +6.595 ns、0 setup/0 hold
+```
+
+> local35 只烧了 SRAM，**未固化 → 按规矩不进备份清单**；要固化时再补 backup/fw/local35。
+

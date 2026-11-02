@@ -16,6 +16,9 @@ module decim512 (
 );
 
     reg [18:0] acc;      // 512*1023 = 523776 < 2^19
+    // [2026-11-02] 先算成 19bit 再取高位：原来直接写 (acc+din)>>9，
+    //   加法上下文被 LHS 的 10bit 拉窄，verilator 报 WIDTHEXPAND/TRUNC 噪音
+    wire [18:0] acc_sum = acc + {9'b0, din};
     reg [9:0]  cnt;
 
     always @(posedge clk) begin
@@ -26,7 +29,7 @@ module decim512 (
             dvalid <= 1'b0;
             if (en) begin
                 if (cnt == 10'd511) begin
-                    dout   <= (acc + {14'b0, din}) >> 9;   // 512 点平均
+                    dout   <= acc_sum[18:9];                // = (acc+din)>>9，位等价
                     dvalid <= 1'b1;
                     acc    <= 19'd0;
                     cnt    <= 10'd0;

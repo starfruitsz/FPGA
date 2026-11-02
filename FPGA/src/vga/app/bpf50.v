@@ -75,7 +75,7 @@ module bpf50 (
     wire signed [23:0] zq = ($signed({14'b0, din}) - 24'sd512) <<< 8;   // 输入 Q8
     wire signed [23:0] err = zq - xq;
     wire signed [39:0] mul = err * $signed({24'b0, kal_k});
-    wire signed [23:0] inc = mul >>> 16;
+    wire signed [23:0] inc = mul[39:16];   // = (mul>>>16) 取低 24 位，位等价
     wire signed [23:0] xn  = xq + inc;
 
     // 输出: Q8 -> Q0，限幅后加中点
