@@ -52,7 +52,15 @@ module bpf_ctrl (
     wire signed [63:0] f64  = {{32{F_Q24[23]}}, F_Q24};
     wire signed [63:0] m1_64 = band * f64;
     wire signed [63:0] m3_64 = high * f64;
-    wire signed [63:0] qb_64 = band * {{48'b0, Q_Q16}};
+    // [2026-11-02 修复] 这里必须用 $signed()：
+    //   原写法 band * {{48'b0, Q_Q16}} 中，右操作数是无符号 64bit，Verilog 规则
+    //   会把有符号的 band 先零扩展到 64bit 再相乘 —— band 为负时（正弦的负半周）
+    //   -1000 会被当成 0x00000000FFFFFC18(≈4.29e9)，乘积巨大且为正，
+    //   再 >>>16（无符号即逻辑右移）得到错误的 qb，于是 high/band 被彻底带偏：
+    //   输入正弦 -> 输出在两端来回跳，实测就是用户看到的"开关信号"方波。
+    //   位精确模型（Python，tools/bpf_model.py）复现：
+    //     修前 pp=595（214/809 两电平跳动）；修后 pp=201（输入 pp=200，增益 1.0）
+    wire signed [63:0] qb_64 = band * $signed({48'b0, Q_Q16});
 
     wire signed [31:0] band_n = band + t3;
     // 归一化：bc = band * (1/Q)，使 47Hz 处增益 = 1（否则峰值增益 = Q = 3.36）
