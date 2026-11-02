@@ -37,8 +37,10 @@ module tb_vga_scope_top;
     localparam [11:0] COL_BG   = 12'h012;
     localparam [11:0] COL_GRID = 12'h151;
     localparam [11:0] COL_AXIS = 12'h2A2;
-    localparam [11:0] COL_CH0  = 12'h1F1;
-    localparam [11:0] COL_CH1  = 12'hFF1;
+    // [2026-11-02] 通道配色已按用户要求改过：CH0=黄 FF1、CH1=蓝 33F
+    //   （旧 TB 里 CH0=青 1F1 / CH1=黄 FF1 是改动前的值，导致整屏比对全部错位）
+    localparam [11:0] COL_CH0  = 12'hFF1;
+    localparam [11:0] COL_CH1  = 12'h33F;
     localparam [11:0] COL_TEXT = 12'hFFF;
     // 菜单 OSD 的三种自用颜色（menu_layer 内部的 C_BG/C_BORDER/C_SELBG）
     localparam [11:0] COL_MENU_BG     = 12'h123;
@@ -76,7 +78,10 @@ module tb_vga_scope_top;
         .FEAT_TRIG(1), .FEAT_MEAS(1), .FEAT_SCROLL(1), .FEAT_UART(1)
     ) dut (
         .clk(clk), .rst(rst), .ch0_in(ch0_in), .ch1_in(ch1_in),
-        .adc_valid(adc_valid), .adc_mode(adc_mode), .key_n(4'b1111), .sw_menu(sw_menu), .sw_run(1'b0), .sw_page(sw_page), .sw_roll(1'b0), .sw_roll2(1'b1), .sw_auto(sw_auto), .sw_hzfree(1'b0), .sw_move(1'b0),
+        // [2026-11-02 修复] 原来漏连 sw_filt：悬空=z -> bpf50 的 filt_ok 变 X ->
+        //   ch0_f/ch1_f 全 X -> RAM 里全是 X（斜坡用例因此一个像素都画不出来）。
+        //   这里显式接 0（=SW15 拨下，显示滤波关闭），与其余开关的默认态一致。
+        .adc_valid(adc_valid), .adc_mode(adc_mode), .key_n(4'b1111), .sw_menu(sw_menu), .sw_run(1'b0), .sw_page(sw_page), .sw_roll(1'b0), .sw_roll2(1'b1), .sw_auto(sw_auto), .sw_hzfree(1'b0), .sw_move(1'b0), .sw_filt(1'b0),
         .cfg_tb_we(cfg_tb_we), .cfg_tb(cfg_tb),
         .cfg_run_we(1'b0), .cfg_run(1'b1),
         .cfg_ten_we(1'b0), .cfg_ten(1'b0),
@@ -228,6 +233,11 @@ module tb_vga_scope_top;
         if (dut.u_auto.mid_out1 !== 10'd800)  begin errors=errors+1; $display("  FAIL CH1 中点不是 800"); end
         if (dut.u_auto.peak_out !== 10'd412)  begin errors=errors+1; $display("  FAIL peak_out 不是 max(peak0,peak1)=412"); end
         if (dut.vg0 !== dut.vg1)    begin errors=errors+1; $display("  FAIL 两通道档位不一致"); end
+        // [2026-11-02 新增诊断] 把自动量程的中间量打出来，便于定位"居中偏了"是 TB 期望旧账
+        //   还是 RTL 精细居中的位宽/符号问题
+        $display("  dbg: vg=%0d/%0d fine=%0d/%0d voff=%0d/%0d pos=%0d/%0d mid_d=%0d/%0d",
+                 dut.vg0, dut.vg1, dut.fine0, dut.fine1, dut.voff0, dut.voff1,
+                 dut.pos0, dut.pos1, dut.mid_d0, dut.mid_d1);
         // 通道显不显示只由 ch0_en/ch1_en 决定，自动量程不许动它们
         if (dut.ch0_en !== 1'b1 || dut.ch1_en !== 1'b1)
                           begin errors=errors+1; $display("  FAIL 自动量程改变了通道使能"); end
@@ -330,6 +340,20 @@ module tb_vga_scope_top;
 
         $display("  CH0 波形行范围 : %0d..%0d (应纵向铺开 >200)", ch0_y_min, ch0_y_max);
         $display("  CH0 像素数     : %0d", n_ch0);
+        $display("  dbg ramp: vg=%0d fine=%0d voff=%0d ch0_en=%b auto=%b vs_auto=%0d peak=%0d mid0=%0d",
+                 dut.vg0, dut.fine0, dut.voff0, dut.ch0_en, dut.sw_auto,
+                 dut.u_auto.vs_out, dut.u_auto.peak_out, dut.u_auto.mid_out0);
+        // 直接看显示 RAM 里存了什么（u_ram0.mem），确认是"没写进去"还是"写进去但没画出来"
+        $display("  dbg ram0[0..7] = %0d %0d %0d %0d %0d %0d %0d %0d",
+                 dut.u_ram0.mem[0], dut.u_ram0.mem[1], dut.u_ram0.mem[2], dut.u_ram0.mem[3],
+                 dut.u_ram0.mem[4], dut.u_ram0.mem[5], dut.u_ram0.mem[6], dut.u_ram0.mem[7]);
+        $display("  dbg tb_div=%0d tb_idx=%0d scroll=%b run=%b state=%0d",
+                 dut.tb_div, dut.tb_idx, dut.scroll_en, dut.sw_run, dut.state_o);
+        $display("  dbg ram0[1024..1027] = %0d %0d %0d %0d  buf_disp0=%b buf_wr0=%b wa0=%0d",
+                 dut.u_ram0.mem[1024], dut.u_ram0.mem[1025], dut.u_ram0.mem[1026], dut.u_ram0.mem[1027],
+                 dut.buf_disp0, dut.buf_wr0, dut.wa0);
+        $display("  dbg 写入探针: we0=%b ch0_in=%0d ch0_f=%0d ram0[1788]=%0d ram0[764]=%0d",
+                 dut.we0, ch0_in, dut.ch0_f, dut.u_ram0.mem[1788], dut.u_ram0.mem[764]);
         // 像素数只当"波形可见"的底线：一屏 640 列、斜坡每列至少 1 个像素，
         // 但窗口是否跨过 1023->0 的回绕点取决于缓冲相位（跨过时多一条整列竖线，
         // 像素数会多出约 447 个），所以这里不卡具体数值。

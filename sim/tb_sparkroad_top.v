@@ -22,7 +22,7 @@ module tb_sparkroad_top;
     reg rst_n = 1'b0;
     reg key = 1'b1;
     reg uart_rx = 1'b1;
-    reg [8:0] sw = 9'b0;                  // SW0..SW8（SW8=1 切 ADC 模式）
+    reg [15:0] sw = 16'b0;                // SW0..SW15（SW8=1 切 ADC；SW13=1 开算法带通）
     reg [9:0] ad_data = 10'd0;            // 并口 AD 模型输出
 
     wire [7:0] vga_r, vga_g, vga_b;
@@ -307,14 +307,24 @@ module tb_sparkroad_top;
         // 6) ADRC 链路: y = ad_val-512 -> eso(每个采样一次) -> u -> da_data=clamp(u+512)
         //------------------------------------------------------------------
         // 位宽约定: 都在 10bit 内按补码回绕比较（ad_y 的位型就是 ad_val-512 的低 10 位）
-        // [2026-11-01] 架构变更：y = Filter(ad_val) - 512（带通后的值）
-        if (dut.ad_y !== (({1'b0,dut.ad_bpf} - 11'sd512) & 11'h7FF) ) begin
-            if ((dut.ad_y & 10'h3FF) !== ((dut.ad_bpf - 10'd512) & 10'h3FF)) begin
-                errors=errors+1;
-                $display("  FAIL ADRC 的 y 不等于 Filter(ad_val)-512 (ad_bpf=%0d y=%0d)",
-                         dut.ad_bpf, $signed(dut.ad_y));
-            end
+        // [2026-11-02] 语义变更：SW13 决定 y 的来源
+        //   SW13=1(带通开)：y = ad_bpf - 512（算法带通输出）
+        //   SW13=0(带通关)：y = ad_val - 512（原始采样）
+        //   显示与 y 共用 ad_ctrl，这里一并校验三者关系。
+        if (dut.ad_ctrl !== (dut.bpf_on ? dut.ad_bpf : dut.ad_val)) begin
+            errors=errors+1;
+            $display("  FAIL ad_ctrl 不等于 (SW13 ? ad_bpf : ad_val) (bpf_on=%b ad_ctrl=%0d)",
+                     dut.bpf_on, dut.ad_ctrl);
         end
+        // 位宽约定：都在 10bit 内按补码回绕比较（ad_y 的位型就是 ad_ctrl-512 的低 10 位）
+        if ((dut.ad_y & 10'h3FF) !== ((dut.ad_ctrl - 10'd512) & 10'h3FF)) begin
+            errors=errors+1;
+            $display("  FAIL ADRC 的 y 不等于 ad_ctrl-512 (bpf_on=%b ad_ctrl=%0d y=%0d)",
+                     dut.bpf_on, dut.ad_ctrl, $signed(dut.ad_y));
+        end
+        $display("  ADRC 输入源: SW13=%b -> %s (ad_val=%0d ad_bpf=%0d ad_ctrl=%0d)",
+                 dut.bpf_on, dut.bpf_on ? "带通输出" : "原始采样",
+                 dut.ad_val, dut.ad_bpf, dut.ad_ctrl);
         // DAC 码 = clamp(u_sgn + 512)，u_sgn 由 SW14 决定符号
         if (dut.adrc_da !== (({1'b0,dut.eso_u_eff} + 11'd512) > 11'd1023 ? 10'd1023 : ({1'b0,dut.eso_u_eff} + 10'd512))) begin
             errors=errors+1;

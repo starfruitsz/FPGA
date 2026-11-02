@@ -309,7 +309,11 @@ module sparkroad_scope_top #(
             else                          ad_ready_cnt <= ad_ready_cnt + 12'd1;
         end
     end
-    wire sw_run_eff = sw1_lv | ~ad_ready;   // =1 表示冻结
+    // [2026-11-02 修复] 上电保护只在 **AD/DA 模式** 生效！
+    //   原来写 sw1_lv | ~ad_ready，而 ad_ready 在 !adc_mode 时被清 0，
+    //   于是信号源模式（SW8 拨下）被永久强制冻结 —— 整机 TB 里 RAM 全是 X、
+    //   屏幕上根本没有波形。正确语义：ADC 未就绪时冻结，且仅限 ADC 模式。
+    wire sw_run_eff = sw1_lv | (adc_mode & ~ad_ready);   // =1 表示冻结
 
     // 只有 AD/DA 模式才推进观测器；自发生模式整条 ADRC 链路保持
     // ADRC 仍按 3.15MHz 采样推进，y 用保持住的带通输出（观测器带宽不必重算）

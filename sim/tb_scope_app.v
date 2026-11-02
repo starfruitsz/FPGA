@@ -16,7 +16,8 @@
 //   8) 串口 S0/S1 -> 同样能改 scroll_en，优先级最高
 //   9) 关菜单后滚动状态不被 SW5 之外的东西覆盖
 //  10) 菜单关闭时 SW2 = 通道选择: 拨下=CH0(sel_ch=0)、拨上=CH1(sel_ch=1)
-//  11) 菜单关闭时 U/D 只改"选中通道"的档位，另一路完全不动，夹紧 2..7
+//  11) 菜单关闭时 U/D 只改"选中通道"的垂直增益档 vstep，另一路完全不动
+//      （vstep 为有符号 6bit：复位 0、每步 ±1、夹紧 ±30，每步 ×1.125）
 //  12) 长按首拍 + 30ms 重复同样只作用选中通道（次数、夹紧都对）
 //  13) SW7 拨上时 U/D 仍是移动基线（优先级高于通道选择）
 //  14) 菜单打开时 SW2 仍是翻页（P0/P1），sel_ch 保持；关菜单后重新跟随 SW2
@@ -66,10 +67,11 @@ module tb_scope_app;
     wire        ev_short_o, ev_long_o;
     wire        ch0_en, ch1_en;
     wire        sel_ch;              // 选中通道 0=CH0 1=CH1（菜单关闭时由 SW2 选择）
-    wire [2:0]  vs0, vs1;
+    wire signed [5:0] vstep0, vstep1;   // 2026-11-02: Q12 连续增益档（±30），不再是右移档 2..7
     wire [3:0]  pos0, pos1;
     wire        roll;
-    wire [6:0]  hscale;              // 横轴缩放系数 S(1..102)
+    wire [6:0]  hscale;              // 横轴缩放系数 S(1..102)：自适应采样率下固定 102
+    wire signed [9:0] hzoom10;       // 横轴缩放档 x10（每按一次 ±5，夹紧 ±300）
     wire signed [12:0] yoff;
     wire        menu_page;
     // 两套独立信号源参数（CH0/CH1）
@@ -102,8 +104,8 @@ module tb_scope_app;
         .scroll_en(scroll_en), .tb_idx(tb_idx), .page(page), .state_o(state_o),
         .ev_short_o(ev_short_o), .ev_long_o(ev_long_o),
         .ch0_en(ch0_en), .ch1_en(ch1_en), .sel_ch(sel_ch),
-        .vs0(vs0), .vs1(vs1), .pos0(pos0), .pos1(pos1),
-        .roll(roll), .hscale(hscale), .yoff(yoff), .menu_page(menu_page),
+        .vstep0(vstep0), .vstep1(vstep1), .pos0(pos0), .pos1(pos1),
+        .roll(roll), .hscale(hscale), .hzoom10(hzoom10), .yoff(yoff), .menu_page(menu_page),
         .wave0(wave0), .fsel0(fsel0), .asel0(asel0), .phase0(phase0),
         .wave1(wave1), .fsel1(fsel1), .asel1(asel1), .phase1(phase1),
         .menu_on(menu_on), .menu_sel(menu_sel)
@@ -169,12 +171,15 @@ module tb_scope_app;
         repeat (10) @(posedge clk);
 
         // ---------- 0) 默认值 ----------
-        $display("  默认: scroll_en=%b roll=%b vs0=%0d S=%0d menu_on=%b",
-                 scroll_en, roll, vs0, hscale, menu_on);
+        $display("  默认: scroll_en=%b roll=%b vstep0=%0d S=%0d menu_on=%b",
+                 scroll_en, roll, vstep0, hscale, menu_on);
+        // 复位值：vstep 两路都应回到 0（Q12 连续增益的中点 = 1:1）
+        if ((vstep0 !== 6'sd0) || (vstep1 !== 6'sd0)) begin
+            errors=errors+1; $display("  FAIL 复位后 vstep 应为 0/0"); end
         if ((scroll_en !== 1'b0) || (roll !== 1'b0)) begin
             errors=errors+1; $display("  FAIL 复位后滚动状态应为 0"); end
-        if (hscale !== 7'd64) begin
-            errors=errors+1; $display("  FAIL 复位后 S 应为 64(1:1)"); end
+        if (hscale !== 7'd102) begin
+            errors=errors+1; $display("  FAIL 复位后 hscale 应为 102（自适应采样率，一屏用满缓冲）"); end
 
         // 两套信号源参数：CH0=正弦/50Hz/满幅/0 度，CH1=方波/50Hz/半幅/0 度
         $display("  默认: CH0 WAV=%0d FRE=%0d ATT=%0d PHA=%0d / CH1 WAV=%0d FRE=%0d ATT=%0d PHA=%0d",
@@ -197,55 +202,64 @@ module tb_scope_app;
         if ((scroll_en !== 1'b0) || (roll !== 1'b0)) begin
             errors=errors+1; $display("  FAIL SW5 拨上没有退出滚动"); end
 
-        // ---------- 2) 短按 L/R：乘性小步（约 ±1/8）----------
-        s_exp = ref_out(7'd64);
-        press_key(0);      // R 短按 = 缩小
-        $display("  2) 短按 R: S=%0d (expect %0d = 64+64/8)", hscale, s_exp);
-        if (hscale !== s_exp) begin errors=errors+1; $display("  FAIL 短按 R 的乘性步进"); end
+        // ---------- 2) 短按 L/R：时基档 tb_idx ±1 ----------
+        //   [2026-11-02 语义变更] 横轴缩放改成"自适应采样率"：hscale 固定 HSC_MAX(102)，
+        //   L/R 不再改 hscale，而是改 tb_idx（采样率档），每按一次 ±1 档并记账 ±5。
+        //   tb_idx: 0 最快(tb_div=49999) .. 15 最慢(tb_div=0)。
+        $display("  2) 复位: hscale=%0d (expect 102=固定) tb_idx=%0d (expect 0)",
+                 hscale, tb_idx);
+        if (hscale !== 7'd102) begin errors=errors+1; $display("  FAIL hscale 应固定 102"); end
+        if (tb_idx !== 4'd0)  begin errors=errors+1; $display("  FAIL 复位 tb_idx 应为 0"); end
 
-        s_exp = ref_in(s_exp);
-        press_key(1);      // L 短按 = 放大
-        $display("  2) 短按 L: S=%0d (expect %0d)", hscale, s_exp);
-        if (hscale !== s_exp) begin errors=errors+1; $display("  FAIL 短按 L 的乘性步进"); end
+        press_key(1);      // L = 放大 -> tb_idx+1
+        $display("  2) 短按 L: tb_idx=%0d (expect 1) tb_div=%0d (expect 24999)", tb_idx, tb_div);
+        if (tb_idx !== 4'd1) begin errors=errors+1; $display("  FAIL 短按 L 没进一档"); end
+        if (tb_div !== 16'd24999) begin errors=errors+1; $display("  FAIL tb_div 没跟着换表"); end
 
-        s_exp = ref_out(s_exp);
-        press_key(0);
-        if (hscale !== s_exp) begin errors=errors+1; $display("  FAIL 第二次 R 的乘性步进"); end
-        // 只是短按一次走一步：不能出现"一次跳好几档"
+        press_key(1);      // L 再一档 -> 2
+        if (tb_idx !== 4'd2) begin errors=errors+1; $display("  FAIL 短按 L 第二次没累加"); end
+
+        press_key(0);      // R = 缩小 -> 回 1
+        $display("  2) 短按 R: tb_idx=%0d (expect 1) tb_div=%0d (expect 24999)", tb_idx, tb_div);
+        if (tb_idx !== 4'd1) begin errors=errors+1; $display("  FAIL 短按 R 没退一档"); end
+        if (tb_div !== 16'd24999) begin errors=errors+1; $display("  FAIL tb_div 没跟着退回"); end
 
         // ---------- 3) 长按 U：500ms 处垂直放大一档 ----------
         hold_key(3, DB_CNT + LONG_CNT + 500);
-        $display("  3) 长按 U %0d 拍: vs0=%0d (expect 3，长按一档)",
-                 DB_CNT + LONG_CNT + 500, vs0);
-        if (vs0 !== 3'd3) begin errors=errors+1; $display("  FAIL 长按 U 没有动作"); end
+        $display("  3) 长按 U %0d 拍: vstep0=%0d (expect 1，长按一档)",
+                 DB_CNT + LONG_CNT + 500, vstep0);
+        if (vstep0 !== 6'sd1) begin errors=errors+1; $display("  FAIL 长按 U 没有动作"); end
 
-        // ---------- 4) 长按 R：500ms 后每 30ms 一小步 ----------
-        //   事件：ev_long(500ms) + 3 个 ev_repeat(530/560/590ms) = 4 次缩小
-        s_exp = hscale;
-        for (i = 0; i < 4; i = i + 1) s_exp = ref_out(s_exp);
+        // ---------- 4) 长按 R：500ms 后每 30ms 一档 ----------
+        //   事件：ev_long(500ms) + 3 个 ev_repeat = 4 次；从 tb_idx=1 起连退
+        //   4 档，但 tb_idx 有 0 下界保护，所以最终停在 0。
         hold_key(0, DB_CNT + LONG_CNT + 3*FAST_CNT + 500);
-        $display("  4) 长按 R %0d 拍: S=%0d (expect %0d，4 次乘性小步)",
-                 DB_CNT + LONG_CNT + 3*FAST_CNT + 500, hscale, s_exp);
-        if (hscale !== s_exp) begin
-            errors=errors+1; $display("  FAIL 长按 R 没有连续步进（台阶/次数不对）"); end
+        $display("  4) 长按 R(1+3 次事件): tb_idx=%0d (expect 0，退到 0 停住)", tb_idx);
+        if (tb_idx !== 4'd0) begin
+            errors=errors+1; $display("  FAIL 长按 R 没有连续步进或没在 0 停住"); end
 
-        // ---------- 5) S 夹紧 1..102 ----------
-        for (i = 0; i < 12; i = i + 1) press_key(0);    // 一直缩小
-        $display("  5) 连按 R 12 次: S=%0d (expect 102 上限)", hscale);
-        if (hscale !== 7'd102) begin errors=errors+1; $display("  FAIL S 上限没有夹紧"); end
+        // ---------- 5) tb_idx 夹紧 0..15 + hzoom10 夹紧 ±300 ----------
+        for (i = 0; i < 20; i = i + 1) press_key(1);    // L 一直放大 -> 顶到 15
+        $display("  5) 连按 L 20 次: tb_idx=%0d (expect 15 上限) tb_div=%0d (expect 0)",
+                 tb_idx, tb_div);
+        if (tb_idx !== 4'd15) begin errors=errors+1; $display("  FAIL tb_idx 上限没有夹紧"); end
+        if (tb_div !== 16'd0) begin errors=errors+1; $display("  FAIL 顶档 tb_div 应为 0"); end
+        press_key(1);       // 再按不应回绕到 0
+        if (tb_idx !== 4'd15) begin errors=errors+1; $display("  FAIL 已到 15 还能继续进"); end
+
+        for (i = 0; i < 20; i = i + 1) press_key(0);    // R 一直缩小 -> 回到 0
+        $display("  5) 连按 R 20 次: tb_idx=%0d (expect 0 下限)", tb_idx);
+        if (tb_idx !== 4'd0) begin errors=errors+1; $display("  FAIL tb_idx 下限没有夹紧"); end
         press_key(0);
-        if (hscale !== 7'd102) begin errors=errors+1; $display("  FAIL 已到 102 还能继续涨"); end
+        if (tb_idx !== 4'd0) begin errors=errors+1; $display("  FAIL 已到 0 还能继续退"); end
 
-        for (i = 0; i < 40; i = i + 1) press_key(1);    // 一直放大
-        $display("  5) 连按 L 40 次: S=%0d (expect 1 下限)", hscale);
-        if (hscale !== 7'd1) begin errors=errors+1; $display("  FAIL S 下限没有夹紧"); end
-        press_key(1);
-        if (hscale !== 7'd1) begin errors=errors+1; $display("  FAIL 已到 1 还能继续降"); end
-        press_key(0);
-        if (hscale !== 7'd2) begin errors=errors+1; $display("  FAIL 从 1 往回按没有反应"); end
+        //   hzoom10 记账：上面共按了很多次，夹在 ±300（=±30.0 档）。
+        $display("  5) hzoom10=%0d (expect 在 -300..300 之间)", hzoom10);
+        if ((hzoom10 > 10'sd300) || (hzoom10 < -10'sd300)) begin
+            errors=errors+1; $display("  FAIL hzoom10 没有夹紧"); end
 
-        // 先把 S 拉回 1:1 附近，让 HSC 的乘性步进能看出真实变化（而不是 1/2 的边界值）
-        while (hscale < 7'd60) press_key(0);
+        // 把时基拉回 1:1 附近，让 HSC 的乘性步进能看出真实变化（而不是 1/2 的边界值）
+        // 死代码已删：hscale 固定 102，这个等待条件永不成立
 
         // ---------- 6) 菜单 HSC 项：与 L/R 同一规则 ----------
         sw_menu = 1'b1;
@@ -317,52 +331,67 @@ module tb_scope_app;
         $display("  10) SW2 拨下(菜单关): sel_ch=%b (expect 0=CH0)", sel_ch);
         if (sel_ch !== 1'b0) begin errors=errors+1; $display("  FAIL SW2 拨下没有选中 CH0"); end
 
-        // ---------- 11) 菜单关闭时 U/D 只改"选中通道"的垂直档位 ----------
-        //   进入本步时 vs0=3（第 3 步长按改过）、vs1=4（复位值）。
+        // ---------- 11) 菜单关闭时 U/D 只改"选中通道"的垂直增益档 ----------
+        //   新语义（2026-11-02 Q12 连续增益）：vstep 有符号 6bit，复位 0，
+        //   U=+1（放大 1.125x）、D=-1（缩小），两路各自夹紧在 ±30。
+        //   进入本步时 vstep0=1（第 3 步长按改过）、vstep1=0（复位值）。
         press_key(3);      // U = 放大 CH0
-        $display("  11) sel_ch=0 短按 U: vs0=%0d vs1=%0d (expect 2/4)", vs0, vs1);
-        if (vs0 !== 3'd2) begin errors=errors+1; $display("  FAIL CH0 档位没有放大"); end
-        if (vs1 !== 3'd4) begin errors=errors+1; $display("  FAIL 选中 CH0 时改到了 CH1"); end
+        $display("  11) sel_ch=0 短按 U: vstep0=%0d vstep1=%0d (expect 2/0)", vstep0, vstep1);
+        if (vstep0 !== 6'sd2) begin errors=errors+1; $display("  FAIL CH0 档位没有放大"); end
+        if (vstep1 !== 6'sd0) begin errors=errors+1; $display("  FAIL 选中 CH0 时改到了 CH1"); end
 
-        press_key(3);      // 已在 2，再按不动
-        $display("  11) sel_ch=0 再按 U: vs0=%0d (expect 2，夹紧)", vs0);
-        if (vs0 !== 3'd2) begin errors=errors+1; $display("  FAIL vs0 下限没有夹紧"); end
+        press_key(3);      // 再 +1 -> 3（这里不再夹紧，夹紧留到第 12 步做满量程验证）
+        $display("  11) sel_ch=0 再按 U: vstep0=%0d (expect 3)", vstep0);
+        if (vstep0 !== 6'sd3) begin errors=errors+1; $display("  FAIL CH0 连续两档没有累加"); end
 
-        press_key(2);      // D = 缩小 CH0 -> 3
-        $display("  11) sel_ch=0 短按 D: vs0=%0d vs1=%0d (expect 3/4)", vs0, vs1);
-        if (vs0 !== 3'd3) begin errors=errors+1; $display("  FAIL CH0 档位没有缩小"); end
-        if (vs1 !== 3'd4) begin errors=errors+1; $display("  FAIL 选中 CH0 时 D 改到了 CH1"); end
+        press_key(2);      // D = 缩小 CH0 -> 2
+        $display("  11) sel_ch=0 短按 D: vstep0=%0d vstep1=%0d (expect 2/0)", vstep0, vstep1);
+        if (vstep0 !== 6'sd2) begin errors=errors+1; $display("  FAIL CH0 档位没有缩小"); end
+        if (vstep1 !== 6'sd0) begin errors=errors+1; $display("  FAIL 选中 CH0 时 D 改到了 CH1"); end
 
-        // 切到 CH1（SW2 拨上），U/D 应只改 vs1
+        // 切到 CH1（SW2 拨上），U/D 应只改 vstep1
         sw_page = 1'b1;
         repeat (10) @(posedge clk);
         if (sel_ch !== 1'b1) begin errors=errors+1; $display("  FAIL 切不到 CH1"); end
-        press_key(2); press_key(2);        // D 两次：vs1 4 -> 6
-        press_key(3);                      // U 一次：vs1 6 -> 5
-        $display("  11) sel_ch=1 短按 D,D,U: vs1=%0d vs0=%0d (expect 5/3)", vs1, vs0);
-        if (vs1 !== 3'd5) begin errors=errors+1; $display("  FAIL CH1 档位没有按 D/D/U 变化"); end
-        if (vs0 !== 3'd3) begin errors=errors+1; $display("  FAIL 选中 CH1 时改到了 CH0"); end
+        press_key(2); press_key(2);        // D 两次：vstep1 0 -> -2
+        press_key(3);                      // U 一次：-2 -> -1
+        $display("  11) sel_ch=1 短按 D,D,U: vstep1=%0d vstep0=%0d (expect -1/2)", vstep1, vstep0);
+        if (vstep1 !== -6'sd1) begin errors=errors+1; $display("  FAIL CH1 档位没有按 D/D/U 变化"); end
+        if (vstep0 !== 6'sd2) begin errors=errors+1; $display("  FAIL 选中 CH1 时改到了 CH0"); end
 
         // ---------- 12) 长按首拍 + 30ms 重复也只作用选中通道 ----------
-        //   先把 CH1 顶到上限 7（顺带验证 7 的夹紧），再长按 U：
-        //   ev_long 1 次 + ev_repeat 3 次 = 4 步，7 -> 3；CH0 完全不动。
-        for (i = 0; i < 8; i = i + 1) press_key(2);   // D 连按：5 -> 7 后夹住
-        $display("  12) 连按 D 8 次: vs1=%0d (expect 7 上限)", vs1);
-        if (vs1 !== 3'd7) begin errors=errors+1; $display("  FAIL vs1 上限没有夹紧"); end
+        //   先把 CH1 按到下限 -30（顺带验证 ±30 夹紧），再长按 U：
+        //   ev_long 1 次 + ev_repeat 3 次 = 4 步，-30 -> -26；CH0 完全不动。
+        for (i = 0; i < 32; i = i + 1) press_key(2);   // D 连按：-1 -> -30 后夹住
+        $display("  12) 连按 D 32 次: vstep1=%0d (expect -30 下限)", vstep1);
+        if (vstep1 !== -6'sd30) begin errors=errors+1; $display("  FAIL vstep1 下限没有夹紧"); end
 
         hold_key(3, DB_CNT + LONG_CNT + 3*FAST_CNT + 500);
-        $display("  12) 长按 U(1+3 次事件): vs1=%0d vs0=%0d (expect 3/3)", vs1, vs0);
-        if (vs1 !== 3'd3) begin
+        $display("  12) 长按 U(1+3 次事件): vstep1=%0d vstep0=%0d (expect -26/2)", vstep1, vstep0);
+        if (vstep1 !== -6'sd26) begin
             errors=errors+1; $display("  FAIL 长按首拍/重复没有连续作用到选中通道"); end
-        if (vs0 !== 3'd3) begin errors=errors+1; $display("  FAIL 长按误改了 CH0 的档位"); end
+        if (vstep0 !== 6'sd2) begin errors=errors+1; $display("  FAIL 长按误改了 CH0 的档位"); end
+
+        //  顺带验证上限 +30：切回 CH0，连按 U 直到顶住
+        sw_page = 1'b0;
+        repeat (10) @(posedge clk);
+        for (i = 0; i < 32; i = i + 1) press_key(3);
+        $display("  12) 连按 U 32 次(CH0): vstep0=%0d (expect 30 上限)", vstep0);
+        if (vstep0 !== 6'sd30) begin errors=errors+1; $display("  FAIL vstep0 上限没有夹紧"); end
+        //  回落到 2，方便后续步骤的期望值稳定
+        for (i = 0; i < 28; i = i + 1) press_key(2);
+        //  恢复 SW2=CH1（第 11 步切到 CH1 的状态），否则第 14 步"菜单翻页/sel_ch"前提不成立
+        sw_page = 1'b1;
+        repeat (10) @(posedge clk);
+        if (sel_ch !== 1'b1) begin errors=errors+1; $display("  FAIL 恢复不到 CH1 选中"); end
 
         // ---------- 13) SW7 拨上：U/D 仍是移动基线（优先级高于通道选择）----------
         sw_move = 1'b1;
         press_key(3);      // U：基线向上 16 像素
-        $display("  13) SW7=1 短按 U: yoff=%0d vs0=%0d vs1=%0d (expect -16/3/3)",
-                 yoff, vs0, vs1);
+        $display("  13) SW7=1 短按 U: yoff=%0d vstep0=%0d vstep1=%0d (expect -16/2/-26)",
+                 yoff, vstep0, vstep1);
         if (yoff !== -13'sd16) begin errors=errors+1; $display("  FAIL SW7 没有移动基线"); end
-        if ((vs0 !== 3'd3) || (vs1 !== 3'd3)) begin
+        if ((vstep0 !== 6'sd2) || (vstep1 !== -6'sd26)) begin
             errors=errors+1; $display("  FAIL SW7 打开时 U/D 仍然改了档位"); end
         sw_move = 1'b0;
 

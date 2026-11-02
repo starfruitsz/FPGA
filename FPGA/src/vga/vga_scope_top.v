@@ -271,8 +271,15 @@ module vga_scope_top #(
     //   所以两路一定同时完整落在 0..447 的绘图区里。
     wire signed [12:0] mid_d0 = $signed({3'b000, mid_auto0}) - 13'sd512;
     wire signed [12:0] mid_d1 = $signed({3'b000, mid_auto1}) - 13'sd512;
-    wire signed [14:0] fine_raw0 = (mid_d0 * $signed({1'b0, vg_auto})) >>> 12;
-    wire signed [14:0] fine_raw1 = (mid_d1 * $signed({1'b0, vg_auto})) >>> 12;
+    // [2026-11-02 修复] Verilog 里 a*b 的结果宽度 = 操作数宽度的**最大值**，不是相加！
+    //   原来直接写 (13bit * 17bit) >>> 12，乘积按 17bit 计算后溢出：
+    //   实测 mid_d=-112、vg=1792 时应为 -49，实际算出 +15 —— 自动量程的"精细居中"
+    //   整体偏掉（TB 里 CH0 期望 92..355，实测 156..419，正好差 64 行）。
+    //   必须先扩到 30bit 再移位（13+17=30）。
+    wire signed [29:0] fine_mul0 = mid_d0 * $signed({1'b0, vg_auto});
+    wire signed [29:0] fine_mul1 = mid_d1 * $signed({1'b0, vg_auto});
+    wire signed [12:0] fine_raw0 = fine_mul0[24:12];   // 位等价于 (乘积>>>12) 取低 13 位
+    wire signed [12:0] fine_raw1 = fine_mul1[24:12];
     wire signed [12:0] fine0  = sw_auto ? fine_raw0[12:0] : 13'sd0;
     wire signed [12:0] fine1  = sw_auto ? fine_raw1[12:0] : 13'sd0;
 
@@ -285,8 +292,11 @@ module vga_scope_top #(
     //   饱和说明：peak<=1023、vs>=2 -> 220+zp <= 2010，13bit 有符号够用。
     //------------------------------------------------------------------
     wire signed [18:0] pk_x  = $signed({9'b0, peak_auto});
-    wire signed [18:0] zpk0  = (pk_x * $signed({1'b0, vg_auto})) >>> 12;
-    wire signed [18:0] zpk1  = (pk_x * $signed({1'b0, vg_auto})) >>> 12;
+    // [2026-11-02 修复] 同一个坑：19bit * 17bit 的乘积要 36bit，原来按 19bit 算会溢出
+    //   影响基线夹紧范围（SW7 手动移基线时上限算错）。两路共用同一份 vg，故共用一个乘积。
+    wire signed [35:0] zpk_mul = pk_x * $signed({1'b0, vg_auto});
+    wire signed [18:0] zpk0  = zpk_mul[30:12];
+    wire signed [18:0] zpk1  = zpk_mul[30:12];
     wire signed [18:0] lim0  = 19'sd220 + zpk0;
     wire signed [18:0] lim1  = 19'sd220 + zpk1;
     wire signed [12:0] ylim0 = lim0[12:0];
