@@ -15,11 +15,15 @@
 | 版本 | git tag | 主要改动 | 比特流 SHA256（前 12 位） | Flash 校验 |
 |---|---|---|---|---|
 | local30 | `fw-local30` | SW13 带通总开关 + 带通系数 822350 | `357109671a97` | ver30 vs img30 diff=0 |
-| local31 | `fw-local31` | `qb_64` 补 `$signed()`（修"开关信号"） | `85e1add35df8` | 仅 SRAM |
+| local31 | `fw-local31` | `qb_64` 补 `$signed()`（修"开关信号"） | `85e1add35df8` | ver31 vs img31 diff=0 |
 | local32 | `fw-local32` | verilator lint 门禁 + 位宽清理 | `74ad1621cce5` | ver32 vs img32 diff=0 |
 | local33 | `fw-local33` | trace_layer 位宽清理 + TB 适配 | `8842fbe1b720` | ver33 vs img33 diff=0 |
 
-> local31 当时只烧了 SRAM 没固化 Flash，但它是"开关信号"那次的修复版，一并留档。
+> **更正（2026-11-03）**：
+> - local31 **确实固化过**（td_flash31.log 有 PRG-1001 + 回读 diff=0），早前写"仅 SRAM"是笔误。
+> - **local34 / local35 从未烧进板子**：板子在 2026-11-02 16:12 被用户断开，两个 burn 日志
+>   都是 `PRG-9505 USB device open error`。它们只有"综合成功"这一层事实，**不入备份清单**。
+> - 因此板上 / Flash 里实际运行的是 **scope_local33**。
 
 ## 回退步骤
 

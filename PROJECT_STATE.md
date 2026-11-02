@@ -823,6 +823,10 @@ TOTAL: PASS=21  FAIL=0  SKIP=0     （上一轮 17/4）
 LUT 7379/19600、REG 2325、slack +6.038 ns、0 setup/0 hold
 ```
 
+> ⚠️ **更正（2026-11-03）**：local34 **并没有烧进板子**。当时 JTAG 已断开，
+> `td_burn34.log` 里是 `PRG-9505 USB device open error` —— 这一条之前写错了。
+> 板子/Flash 里实际跑的是 **scope_local33**。
+
 ### 22.6 仍未做
 
 lint ADVISORY 剩 30 条（eso 24 / scope_meas 3 / decim512 2 / bpf50 1）。
@@ -876,5 +880,8 @@ TOTAL: PASS=24  FAIL=0  SKIP=0
 LUT 7407/19600、REG 2331、slack +6.595 ns、0 setup/0 hold
 ```
 
-> local35 只烧了 SRAM，**未固化 → 按规矩不进备份清单**；要固化时再补 backup/fw/local35。
+> ⚠️ **更正（2026-11-03）**：local35 **没有烧进去**。板子在上一轮就已经被用户断开，
+> `td_burn35.log` = `PRG-9505 USB device open error`。
+> 结论：local35 只是"综合成功 + 回归全绿"的候选固件，**板上仍是 scope_local33**。
+> 等 USB 接回后再 `download`（必要时固化），并按规矩补 `backup/fw/local35`。
 
