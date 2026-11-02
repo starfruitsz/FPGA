@@ -239,3 +239,54 @@ ADRC(eso.v) ─► u ─► DAC = clamp(u+512) ─► CH1
 8. TD 偶尔在 `wait_run syn_1` 处自己段错误，重跑即可（与代码无关）。
 9. 回读 Flash 偶发 `PRG-9505`，等 3 秒重试。
 10. 板子拔掉后所有烧写都会失败（`PRG-9505`），别误判成代码问题 —— 先确认 USB 在不在。
+
+---
+
+## 15. 软核 / 处理器（2026-11-02 查证）
+
+### 15.1 芯片本身：**没有硬核 CPU**
+
+EG4S20BG256 属 Eagle 系列纯 FPGA，`arch/eagle_20.db` 里没有 ARM/MIPS 硬核。
+安路的硬核 SoC 在别的系列：`ip/cm3_cpu/cm3_core.dat` 对应 `ph1_logic_SopcMcu`（PH1），
+`ip/sf1_riscv/sf1_mcu_core.dat` 对应 SF1。
+
+### 15.2 工具链自带软核：**Agile RISC-V 32 位，官方支持 EG4S20**
+
+TD 手册 §3.12（p105–107）：
+
+- 入口：**Tools → IP Generator → Create an IP core → Soft IP → Micro-Controller → Agile RISC-V**
+- 配置界面标题即 **EG4_LOGIC_CPU**，Device 栏截图就是 **EG4S20BG256**
+- 参数：RAM 4096×32bit（EMB9K / EMB32K 可选）、CPU 时钟 1Hz–1GHz（例 100 MHz）、
+  **内置 UART（Baud Rate 110–2,000,000，例 115200）**、可指定 init 文件（.mif/.dat 预装程序）
+- 生成物：`xxx_gate.v`（**加密门级网表，只支持 Verilog，不支持 VHDL**）
+- 生成模块接口（手册 p107 截图）：
+
+```
+bus_addr[27:0] bus_wdata[31:0] bus_rdata[31:0]
+bus_wen bus_ren bus_wstrb[3:0] bus_merr bus_rerr     // 28 位地址、32 位数据的主口
+txd rxd                                              // 自带 UART
+gpio[31:0] irq_id[3:0] irq_szd                       // GPIO 与中断
+parameter Cpu_rate = 100_000_000; Bd_rate = 115200;
+```
+
+### 15.3 本工程现状：**没有用任何处理器**
+
+采集/触发/菜单/串口命令/ADRC 全是 RTL 状态机。
+
+### 15.4 资源账（要不要上的依据）
+
+| 项 | 当前 | 加软核后（估算）|
+|---|---|---|
+| LUT | 7410 / 19600（37.8%）| +约 2000~5000（加密网表，实测才知道）|
+| BRAM32K | 2 / 16 | 4096×32 = 128 Kbit ≈ 再加 4 块 |
+| DSP | **29 / 29（已满）** | 软核要乘法的话只能走 LUT 实现 |
+
+结论：能放下但余量不大，**建议新开工程做 RISC-V 验证，不要直接塞进示波器工程**。
+
+### 15.5 对项目的价值与边界
+
+- 价值：菜单/协议/参数整定可用 C 写；软核自带 115200 UART（仍走 F16/E16）。
+- 边界：**它不是 JTAG 串口**——JTAG 在安路工具链里只做下载/固化和在线调试（ChipWatcher/ChipProbe）。
+- 落地三步：① GUI 生成 `xxx_gate.v` → ② 顶层例化 + 总线接 BRAM/外设 + init 镜像 →
+  ③ RISC-V GCC 编译 C（Anlogic 是否自带 SDK 未查证，通用 `riscv32-unknown-elf-gcc` 可用）。
+- 另外：TD CLI 里有 `create_syn_ip` 命令，理论上可命令行生成 IP（命令名已确认，参数未验证）。
