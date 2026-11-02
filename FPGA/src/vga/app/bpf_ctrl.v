@@ -49,7 +49,10 @@ module bpf_ctrl (
     // [2026-11-01 修复] 乘法必须用 64bit 中间量：
     //   原写法 (high * f) >>> 24 在 32bit 上下文里先溢出再移位，
     //   实测 t3=14（应为 270），导致 band 累不起来、增益掉到 0.05。
-    wire signed [63:0] f64  = {{32{F_Q24[23]}}, F_Q24};
+    // [2026-11-02] 位宽修正：F_Q24 是 24bit，补到 64bit 需要 40 份符号位
+    //   （原来写 32 份只得到 56bit，被 verilator -Wall 报 WIDTHEXPAND；
+    //     当前 F_Q24>0 时两者结果相同，但 F_Q24 为负时就会出错）
+    wire signed [63:0] f64  = {{40{F_Q24[23]}}, F_Q24};
     wire signed [63:0] m1_64 = band * f64;
     wire signed [63:0] m3_64 = high * f64;
     // [2026-11-02 修复] 这里必须用 $signed()：
@@ -81,12 +84,12 @@ module bpf_ctrl (
             case (st)
                 3'd0: if (en) begin x_q16 <= x_in; st <= 3'd1; end
                 3'd1: begin                                  // t1 = f*band
-                    t1 <= m1_64 >>> 24;
+                    t1 <= m1_64[55:24];      // = (m1_64 >>> 24) 取低32位，位等价
                     st <= 3'd2;
                 end
                 3'd2: begin                                  // low += t1 ; qb = q*band
                     low_n <= low + t1;
-                    qb    <= qb_64 >>> 16;
+                    qb    <= qb_64[47:16];   // = (qb_64 >>> 16) 取低32位，位等价
                     st    <= 3'd3;
                 end
                 3'd3: begin                                  // high = x - low - qb
@@ -94,7 +97,7 @@ module bpf_ctrl (
                     st   <= 3'd4;
                 end
                 3'd4: begin                                  // t3 = f*high
-                    t3 <= m3_64 >>> 24;
+                    t3 <= m3_64[55:24];      // = (m3_64 >>> 24) 取低32位，位等价
                     st <= 3'd5;
                 end
                 3'd5: begin                                  // band += t3 ; 输出

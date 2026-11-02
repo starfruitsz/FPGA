@@ -613,3 +613,58 @@ f 放大 512 倍，每个半周都被打坏 → 立刻变成方波。
 
 运行：`python tools/bpf_model.py`（PASS 返回 0）。
 
+---
+
+## 19. 2026-11-02：verilator 门禁落地 + 一处 56bit 符号扩展真缺陷（固件 scope_local32）
+
+### 19.1 环境：不需要下载，工具本来就在
+
+上一轮写"本机 verilator 缺 Perl 模块 Pod::Usage，需要先修环境"，**结论错了一半**：
+
+| 问题 | 真相 | 解法 |
+|---|---|---|
+| `bin/verilator` 报 Can't locate Pod/Usage.pm | 它是 Perl 包装脚本，走本机 MSYS perl 5.42（缺该模块） | 直接调同目录的 **`verilator_bin.exe`**（真二进制），无需安装任何东西 |
+| `verilator_bin` 报 Cannot find verilated_std.sv | 二进制里 `VERILATOR_ROOT` 编译期写死成构建机路径 `/yosyshq/share/verilator` | `export VERILATOR_ROOT=<suite>/share/verilator` |
+
+两条都封进 `tools/lint.sh`，以后一条命令即可：`bash tools/lint.sh`。
+
+### 19.2 门禁策略（BLOCK / ADVISORY）
+
+- **BLOCK**：`bpf_ctrl.v` —— 必须零告警（本次事故模块）
+- **ADVISORY**：`bpf50(1) / decim512(2) / eso(24) / trace_layer(8) / scope_meas(3)` 共 38 条历史遗留宽度告警，只打印不阻塞；清完一个挪一个进 BLOCK
+
+### 19.3 一个必须说清的边界（自我纠正）
+
+**verilator -Wall 抓不到本次这个 bug。** 它没有 signedness 告警；
+它对 `band * {{48'b0,Q_Q16}}` 不吭声。它抓到的是**宽度**问题。
+所以：
+
+| 缺陷类别 | 守卫 |
+|---|---|
+| 宽度/截断/符号扩展位数 | `tools/lint.sh`（verilator） |
+| **有符号/无符号混用** | `tools/bpf_model.py` 位精确模型（唯一有效守卫） |
+| 功能正确性 | testbench（Icarus 对该模块段错误，暂缺） |
+
+上一轮我说"这类混合符号会给 SIGNED/WIDTH 警告"，那句是错的，这里更正。
+
+### 19.4 lint 顺手抓出的真缺陷（已修）
+
+`bpf_ctrl.v:52` 原来是 `{{32{F_Q24[23]}}, F_Q24}`：24 + 32 = **56 bit**，
+赋值给 64bit 时被零扩展补满。当前 `F_Q24=822350`（正数，符号位=0）时结果碰巧正确，
+但一旦把它改成负数就会错。已改为 `{{40{F_Q24[23]}}, F_Q24}`（24+40=64）。
+
+另 3 处 `x <= m64 >>> N`（64→32 截断告警）改成部分选择 `m64[55:24] / qb_64[47:16]`，
+对二进制补码与原写法**位等价**，但让告警消失、门禁可读。
+
+### 19.5 综合对比（scope_local32）
+
+| 项 | local31 | local32 |
+|---|---|---|
+| LUT | 7351（37.51%） | 7351（37.51%） |
+| REG | 2326 | 2326 |
+| DSP / BRAM32K | 29/29、2/16 | 29/29、2/16 |
+| slack | +5.369 ns | +5.369 ns |
+| 置位位数 | 268007 | 268007 |
+
+逐项相同 → 宽度清理是**零行为变化**的等价改写。
+
