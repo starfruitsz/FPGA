@@ -777,3 +777,55 @@ vgain = 7 << (12 - vs)      // vs=3 -> 3584,  vs=4 -> 1792
 这属于**按新语义重写用例 + 新增夹紧测试**，不是机械替换，下一轮单独做，
 避免"为了把 FAIL 变绿而改断言"。
 
+---
+
+## 22. 2026-11-02 收尾：仿真债清零，回归 21/21（固件 scope_local34）
+
+用户要求"把需要仿真、不需要硬件的都修了"。过程中挖出 **3 个 RTL 真 bug**。
+
+### 22.1 真 bug 1：自动量程"居中"偏 64 行（乘法位宽）
+
+```verilog
+// 错：13bit * 17bit 的乘积按 17bit 计算 -> 溢出
+wire signed [14:0] fine_raw0 = (mid_d0 * $signed({1'b0, vg_auto})) >>> 12;
+```
+
+Verilog 规则：`a*b` 的结果宽度是**操作数宽度的最大值**，不是相加。
+实测 `mid_d=-112, vg=1792` 应为 `-49`，实际算出 `+15` → CH0 期望 92..355、
+实测 156..419，正好差 64 行。改为 30bit 中间量后 `fine=-49/+126`，TB 精确复现。
+
+### 22.2 真 bug 2：基线夹紧限位同类溢出
+
+`19bit * 17bit` 按 19bit 算，影响 SW7 手动移基线时的夹紧上限。改 36bit 中间量。
+
+### 22.3 真 bug 3：信号源模式被永久冻结（上电保护误伤）
+
+```verilog
+wire sw_run_eff = sw1_lv | ~ad_ready;          // 错
+wire sw_run_eff = sw1_lv | (adc_mode & ~ad_ready);  // 对
+```
+
+`ad_ready` 在 `!adc_mode` 时被清 0，于是 **SW8 拨下（内置信号源）时显示永久冻结**，
+整机 TB 里 RAM 全是 X、屏幕上根本没波形。这是 local28 引入回归，板上一直存在。
+
+### 22.4 TB 修复
+
+| 用例 | 原来 | 现在 |
+|---|---|---|
+| `tb_scope_app` | 编译失败（端口 `vs0/vs1` 已改名）| **PASS**：按 vstep ±30 重写 + 夹紧测试；横轴改测 tb_idx ±1 / tb_val 换表 / hzoom10 ±300 |
+| `tb_vga_scope_top`(+pix2) | 11 条失败 | **PASS**：配色改 CH0=FF1/CH1=33F；**补连 `sw_filt`**（原来悬空=z → bpf50 输出 X → RAM 全 X）|
+| `tb_sparkroad_top` | 3 条失败 | **PASS**：`sw` 扩到 16bit；ADRC 断言按 SW13 语义改 |
+
+### 22.5 结果
+
+```
+TOTAL: PASS=21  FAIL=0  SKIP=0     （上一轮 17/4）
+LUT 7379/19600、REG 2325、slack +6.038 ns、0 setup/0 hold
+```
+
+### 22.6 仍未做
+
+lint ADVISORY 剩 30 条（eso 24 / scope_meas 3 / decim512 2 / bpf50 1）。
+规矩不变：**没有专门 TB 的模块不为消警告改位宽**（整机 TB 只能证明"没炸"，
+不能证明位等价）。
+
